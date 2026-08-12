@@ -1,0 +1,253 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #1e1e24;
+  color: #f2f2f5;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 10px;
+  gap: 10px;
+}
+
+.app--loading {
+  align-items: center;
+  justify-content: center;
+  color: #999;
+}
+
+.player-stage {
+  width: 100%;
+  min-height: 152px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.player-stage--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #888;
+  text-align: center;
+  font-size: 13px;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transport button {
+  font-size: 16px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a33;
+  color: inherit;
+  cursor: pointer;
+}
+
+.transport button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 14px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #999;
+  margin: -4px 0 0;
+}
+
+.hint--dj {
+  color: #b7a4ff;
+}
+
+.dj-toggle {
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a33;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dj-panel {
+  border: 1px solid #3a3a45;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #26262e;
+}
+
+.dj-panel-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ccc;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dj-panel-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #888;
+}
+
+.dj-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dj-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.dj-grant {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid #555;
+  background: #33333e;
+  color: #ddd;
+  cursor: pointer;
+}
+
+.dj-grant--active {
+  border-color: #7c5cfc;
+  background: #7c5cfc;
+  color: #fff;
+}
+
+.add-row {
+  display: flex;
+  gap: 6px;
+}
+
+.add-row input {
+  flex: 1;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a33;
+  color: inherit;
+}
+
+.add-row button {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #7c5cfc;
+  background: #7c5cfc;
+  color: #fff;
+  cursor: pointer;
+}
+
+.add-row button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.error {
+  color: #ff8080;
+  font-size: 12px;
+  margin: -4px 0 0;
+}
+
+.queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.queue-item--active {
+  background: #33324a;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #444;
+  color: #ccc;
+  flex-shrink: 0;
+}
+
+.queue-title {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.queue-title:disabled {
+  cursor: default;
+}
+
+.remove {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.remove:disabled {
+  visibility: hidden;
+}
+
+.queue-empty {
+  color: #777;
+  font-size: 13px;
+  text-align: center;
+  padding: 12px;
+}
