@@ -20,7 +20,7 @@ export function PlayerStage({ item, isPlaying, volume, muted, onEnded }: PlayerS
   if (!item) {
     return (
       <div className="player-stage player-stage--empty">
-        <p>Queue is empty. Paste a YouTube or Spotify link below.</p>
+        <p>Queue is empty. Paste a YouTube link below.</p>
       </div>
     );
   }

@@ -5,6 +5,13 @@ import { fetchTitle } from "./lib/fetchTitle";
 import { PlayerStage } from "./components/PlayerStage";
 import { QueueItem } from "./types";
 
+/**
+ * Spotify is gated off while the extension focuses on YouTube. The parser,
+ * SpotifyStage, and warning notice all remain in place — flip this to true to
+ * restore it. Spotify items already sitting in a room's queue still play.
+ */
+const SPOTIFY_ENABLED = false;
+
 const SOURCE_LABEL: Record<string, string> = {
   youtube: "YouTube",
   spotify: "Spotify",
@@ -53,8 +60,14 @@ export default function App() {
     const link = parseLink(inputValue);
     if (!link) {
       setAddError(
-        "Unrecognized link. Use a YouTube video/playlist, or a Spotify track, album, playlist, or artist."
+        SPOTIFY_ENABLED
+          ? "Unrecognized link. Use a YouTube video/playlist, or a Spotify track, album, playlist, or artist."
+          : "That isn't a YouTube video or playlist link."
       );
+      return;
+    }
+    if (!SPOTIFY_ENABLED && link.source === "spotify") {
+      setAddError("Spotify is switched off for now — paste a YouTube link instead.");
       return;
     }
     setAddError(null);
@@ -260,7 +273,7 @@ export default function App() {
         <div className="add-row">
           <input
             type="text"
-            placeholder="Paste a YouTube or Spotify link…"
+            placeholder={SPOTIFY_ENABLED ? "Paste a YouTube or Spotify link…" : "Paste a YouTube link…"}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
