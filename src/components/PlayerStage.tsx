@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { loadScriptOnce } from "../lib/loadScript";
-import { QueueItem } from "../types";
+import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
+import { SPOTIFY_ENABLED } from "../config";
 
 interface PlayerStageProps {
   item: QueueItem | null;
   isPlaying: boolean;
   volume: number; // 0-100, YouTube only; Spotify embeds don't expose volume control
   muted: boolean; // likewise YouTube only
+  /** Shared playback position: where the room was at `anchorAt`. */
+  anchorPosition: number;
+  anchorAt: number;
+  /** Reports this client's playback position so controllers can re-anchor. */
+  onTime?: (seconds: number) => void;
+  /** Video ids discovered inside a YouTube playlist, once it has loaded. */
+  onPlaylistLoaded?: (videoIds: string[]) => void;
   onEnded: () => void;
 }
 
@@ -16,11 +24,23 @@ interface PlayerStageProps {
  * when the underlying media id actually changes, so scrubby state changes
  * (e.g. two clients patching room metadata close together) don't restart playback.
  */
-export function PlayerStage({ item, isPlaying, volume, muted, onEnded }: PlayerStageProps) {
+export function PlayerStage({
+  item,
+  isPlaying,
+  volume,
+  muted,
+  anchorPosition,
+  anchorAt,
+  onTime,
+  onPlaylistLoaded,
+  onEnded,
+}: PlayerStageProps) {
   if (!item) {
     return (
       <div className="player-stage player-stage--empty">
-        <p>Queue is empty. Paste a YouTube link below.</p>
+        <p>
+          Queue is empty. Paste a YouTube{SPOTIFY_ENABLED ? " or Spotify" : ""} link below.
+        </p>
       </div>
     );
   }
@@ -33,6 +53,10 @@ export function PlayerStage({ item, isPlaying, volume, muted, onEnded }: PlayerS
         isPlaying={isPlaying}
         volume={volume}
         muted={muted}
+        anchorPosition={anchorPosition}
+        anchorAt={anchorAt}
+        onTime={onTime}
+        onPlaylistLoaded={onPlaylistLoaded}
         onEnded={onEnded}
       />
     );
@@ -51,6 +75,10 @@ function YouTubeStage({
   isPlaying,
   volume,
   muted,
+  anchorPosition,
+  anchorAt,
+  onTime,
+  onPlaylistLoaded,
   onEnded,
 }: Omit<PlayerStageProps, "item"> & { item: QueueItem }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -82,6 +110,71 @@ function YouTubeStage({
       if (state !== window.YT?.PlayerState.PLAYING) setNeedsGesture(true);
     }, 1500);
   }
+
+  const anchorPositionRef = useRef(anchorPosition);
+  anchorPositionRef.current = anchorPosition;
+  const anchorAtRef = useRef(anchorAt);
+  anchorAtRef.current = anchorAt;
+  const onTimeRef = useRef(onTime);
+  onTimeRef.current = onTime;
+  const onPlaylistLoadedRef = useRef(onPlaylistLoaded);
+  onPlaylistLoadedRef.current = onPlaylistLoaded;
+  const lastPlaylistRef = useRef("");
+
+  /** Where the room expects this client to be, in seconds into the track. */
+  function expectedPosition(): number | null {
+    if (!anchorAtRef.current) return null;
+    if (!isPlayingRef.current) return anchorPositionRef.current;
+    // anchorAt comes from another machine's clock. A badly-set clock would
+    // produce a nonsense elapsed time, so ignore it rather than yanking this
+    // listener to a bogus position.
+    const elapsed = (Date.now() - anchorAtRef.current) / 1000;
+    if (elapsed < 0 || elapsed > 3600) return null;
+    return anchorPositionRef.current + elapsed;
+  }
+
+  /** Seek only when drift is bad enough to be worth the rebuffer. */
+  function syncToAnchor() {
+    const player = playerRef.current;
+    if (!player || !readyRef.current) return;
+    const target = expectedPosition();
+    if (target === null) return;
+    const duration = player.getDuration?.() ?? 0;
+    if (duration > 0 && target >= duration - 1) return;
+    const actual = player.getCurrentTime?.() ?? 0;
+    if (Math.abs(actual - target) > SYNC_TOLERANCE_SECONDS) {
+      player.seekTo?.(target, true);
+    }
+  }
+
+  // Correct as soon as a new anchor arrives, which also covers late joiners.
+  useEffect(() => {
+    if (!readyRef.current) return;
+    syncToAnchor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorPosition, anchorAt, isPlaying]);
+
+  // Heartbeat: report position, correct slow drift, and surface playlist contents.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const player = playerRef.current;
+      if (!player || !readyRef.current) return;
+
+      onTimeRef.current?.(player.getCurrentTime?.() ?? 0);
+      if (isPlayingRef.current) syncToAnchor();
+
+      if (itemRef.current.link.kind === "playlist") {
+        const ids = player.getPlaylist?.() ?? null;
+        const key = ids?.join(",") ?? "";
+        if (key && key !== lastPlaylistRef.current) {
+          lastPlaylistRef.current = key;
+          onPlaylistLoadedRef.current?.(ids as string[]);
+        }
+      }
+    }, 2000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Push the current audio settings at the player, whenever it's able to take them. */
   function applyAudio() {
@@ -221,7 +314,10 @@ function SpotifyStage({
   item,
   isPlaying,
   onEnded,
-}: Omit<PlayerStageProps, "volume" | "muted" | "item"> & { item: QueueItem }) {
+}: Omit<
+  PlayerStageProps,
+  "volume" | "muted" | "item" | "anchorPosition" | "anchorAt" | "onTime" | "onPlaylistLoaded"
+> & { item: QueueItem }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<SpotifyEmbedController | null>(null);
   const readyRef = useRef(false);

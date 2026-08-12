@@ -38,6 +38,12 @@ declare global {
     loadPlaylist(options: { list: string }): void;
     getIframe?(): HTMLIFrameElement | null;
     getPlayerState?(): number;
+    getCurrentTime?(): number;
+    getDuration?(): number;
+    seekTo?(seconds: number, allowSeekAhead: boolean): void;
+    getPlaylist?(): string[] | null;
+    getPlaylistIndex?(): number;
+    playVideoAt?(index: number): void;
     setVolume?(volume: number): void;
     mute?(): void;
     unMute?(): void;

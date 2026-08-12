@@ -33,6 +33,20 @@ export function usePlayerId(ready: boolean): string | null {
   return id;
 }
 
+/** The current player's display name, so their requests can be attributed. */
+export function usePlayerName(ready: boolean): string {
+  const [name, setName] = useState("Someone");
+  useEffect(() => {
+    if (!ready) return;
+    let unsubscribed = false;
+    OBR.player.getName().then((value) => {
+      if (!unsubscribed) setName(value || "Someone");
+    });
+    return OBR.player.onChange((player) => setName(player.name || "Someone"));
+  }, [ready]);
+  return name;
+}
+
 export interface PartyMember {
   id: string;
   name: string;

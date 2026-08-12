@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { useIsGM, useObrReady, usePlayerId, useParty, useRoomState } from "./lib/useOwlbear";
+import {
+  useIsGM,
+  useObrReady,
+  usePlayerId,
+  usePlayerName,
+  useParty,
+  useRoomState,
+} from "./lib/useOwlbear";
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
 import { PlayerStage } from "./components/PlayerStage";
-import { QueueItem } from "./types";
-
-/**
- * Spotify is gated off while the extension focuses on YouTube. The parser,
- * SpotifyStage, and warning notice all remain in place — flip this to true to
- * restore it. Spotify items already sitting in a room's queue still play.
- */
-const SPOTIFY_ENABLED = false;
+import { QueueItem, SongRequest } from "./types";
+import { SPOTIFY_ENABLED } from "./config";
 
 const SOURCE_LABEL: Record<string, string> = {
   youtube: "YouTube",
@@ -21,6 +22,7 @@ export default function App() {
   const ready = useObrReady();
   const isGM = useIsGM(ready);
   const playerId = usePlayerId(ready);
+  const playerName = usePlayerName(ready);
   const party = useParty(ready);
   const [room, patchRoom] = useRoomState(ready);
   const [inputValue, setInputValue] = useState("");
@@ -34,6 +36,14 @@ export default function App() {
   // Warn once per popover session, so it lands the first time it matters
   // without nagging on every Spotify link that follows.
   const spotifyWarned = useRef(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [requestSent, setRequestSent] = useState(false);
+  const [showPlaylist, setShowPlaylist] = useState(false);
+  const [playlistIds, setPlaylistIds] = useState<string[]>([]);
+  const [playlistTitles, setPlaylistTitles] = useState<Record<string, string>>({});
+  // This client's live playback position, kept out of state so the 2s
+  // heartbeat doesn't re-render the whole popover.
+  const positionRef = useRef(0);
 
   // Clearing wipes the queue for everyone, so it takes two clicks. Forget the
   // pending confirmation if the second click doesn't come promptly.
@@ -48,6 +58,43 @@ export default function App() {
   const currentItem = room.currentIndex >= 0 ? room.queue[room.currentIndex] ?? null : null;
   // Spotify's embed exposes no volume API, so the controls would silently lie.
   const spotifyActive = currentItem?.link.source === "spotify";
+  const currentIsPlaylist = currentItem?.link.kind === "playlist";
+
+  // Long tracks drift, so the client driving the queue republishes its position
+  // periodically. Exactly one writer, same as auto-advance.
+  useEffect(() => {
+    if (!room.isPlaying) return;
+    const timer = window.setInterval(() => {
+      if (!isAdvancer()) return;
+      patchRoom({ anchorPosition: positionRef.current, anchorAt: Date.now() });
+    }, 15000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.isPlaying, room.currentIndex, isGM, isDJ, playerId, party.length]);
+
+  // Look up titles for the tracks inside an expanded playlist, keylessly.
+  useEffect(() => {
+    if (!showPlaylist || playlistIds.length === 0) return;
+    const missing = playlistIds.filter((id) => !playlistTitles[id]).slice(0, 60);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map(async (id) => {
+        const title = await fetchTitle(`https://www.youtube.com/watch?v=${id}`, {
+          source: "youtube",
+          kind: "video",
+          mediaId: id,
+        });
+        return [id, title] as const;
+      })
+    ).then((pairs) => {
+      if (!cancelled) setPlaylistTitles((prev) => ({ ...prev, ...Object.fromEntries(pairs) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPlaylist, playlistIds]);
 
   function setDJ(id: string, granted: boolean) {
     if (!isGM) return;
@@ -85,6 +132,7 @@ export default function App() {
       queue: nextQueue,
       currentIndex: isFirstItem ? 0 : room.currentIndex,
       isPlaying: isFirstItem ? true : room.isPlaying,
+      ...(isFirstItem ? restartAnchor() : {}),
     });
     if (link.source === "spotify" && !spotifyWarned.current) {
       spotifyWarned.current = true;
@@ -94,21 +142,44 @@ export default function App() {
     setAdding(false);
   }
 
+  /** Anchor at the top of a track — every client should start from the beginning. */
+  function restartAnchor() {
+    return { anchorPosition: 0, anchorAt: Date.now() };
+  }
+
+  /** Anchor at wherever this client currently is, for pause/resume in place. */
+  function anchorHere() {
+    return { anchorPosition: positionRef.current, anchorAt: Date.now() };
+  }
+
   function playAt(index: number) {
     if (!canControl) return;
-    patchRoom({ currentIndex: index, isPlaying: true });
+    setShowPlaylist(false);
+    patchRoom({ currentIndex: index, isPlaying: true, ...restartAnchor() });
   }
 
   function togglePlay() {
     if (!canControl) return;
-    patchRoom({ isPlaying: !room.isPlaying });
+    patchRoom({ isPlaying: !room.isPlaying, ...anchorHere() });
   }
 
   function skip(delta: 1 | -1) {
     if (!canControl) return;
     if (room.queue.length === 0) return;
     const next = (room.currentIndex + delta + room.queue.length) % room.queue.length;
-    patchRoom({ currentIndex: next, isPlaying: true });
+    setShowPlaylist(false);
+    patchRoom({ currentIndex: next, isPlaying: true, ...restartAnchor() });
+  }
+
+  /** Drag-and-drop reordering; the playing track keeps playing wherever it lands. */
+  function moveItem(from: number, to: number) {
+    if (!canControl || from === to) return;
+    const nextQueue = [...room.queue];
+    const [moved] = nextQueue.splice(from, 1);
+    nextQueue.splice(to, 0, moved);
+    const currentId = room.queue[room.currentIndex]?.id;
+    const nextIndex = currentId ? nextQueue.findIndex((i) => i.id === currentId) : room.currentIndex;
+    patchRoom({ queue: nextQueue, currentIndex: nextIndex });
   }
 
   function removeAt(index: number) {
@@ -162,7 +233,55 @@ export default function App() {
     if (!isAdvancer()) return;
     if (room.queue.length === 0) return;
     const next = (room.currentIndex + 1) % room.queue.length;
-    patchRoom({ currentIndex: next, isPlaying: true });
+    patchRoom({ currentIndex: next, isPlaying: true, ...restartAnchor() });
+  }
+
+  /** A listener without control proposes a track for a GM or DJ to approve. */
+  async function handleRequest() {
+    const link = parseLink(inputValue);
+    if (!link) {
+      setAddError("That isn't a link this extension can play.");
+      return;
+    }
+    if (!SPOTIFY_ENABLED && link.source === "spotify") {
+      setAddError("Spotify is switched off for now — request a YouTube link instead.");
+      return;
+    }
+    setAddError(null);
+    setAdding(true);
+    const title = await fetchTitle(inputValue, link);
+    const request: SongRequest = {
+      id: crypto.randomUUID(),
+      url: inputValue.trim(),
+      title,
+      link,
+      requestedById: playerId ?? "unknown",
+      requestedByName: playerName,
+    };
+    patchRoom({ requests: [...room.requests, request] });
+    setInputValue("");
+    setAdding(false);
+    setRequestSent(true);
+    window.setTimeout(() => setRequestSent(false), 4000);
+  }
+
+  function approveRequest(request: SongRequest) {
+    if (!canControl) return;
+    const { requestedById: _id, requestedByName: _name, ...item } = request;
+    const nextQueue = [...room.queue, item as QueueItem];
+    const isFirstItem = room.currentIndex === -1;
+    patchRoom({
+      queue: nextQueue,
+      requests: room.requests.filter((r) => r.id !== request.id),
+      currentIndex: isFirstItem ? 0 : room.currentIndex,
+      isPlaying: isFirstItem ? true : room.isPlaying,
+      ...(isFirstItem ? restartAnchor() : {}),
+    });
+  }
+
+  function dismissRequest(id: string) {
+    if (!canControl) return;
+    patchRoom({ requests: room.requests.filter((r) => r.id !== id) });
   }
 
   if (!ready) {
@@ -176,6 +295,12 @@ export default function App() {
         isPlaying={room.isPlaying}
         volume={volume}
         muted={muted}
+        anchorPosition={room.anchorPosition}
+        anchorAt={room.anchorAt}
+        onTime={(seconds) => {
+          positionRef.current = seconds;
+        }}
+        onPlaylistLoaded={setPlaylistIds}
         onEnded={handleEnded}
       />
 
@@ -269,22 +394,55 @@ export default function App() {
         </div>
       )}
 
-      {canControl ? (
-        <div className="add-row">
-          <input
-            type="text"
-            placeholder={SPOTIFY_ENABLED ? "Paste a YouTube or Spotify link…" : "Paste a YouTube link…"}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          />
-          <button onClick={handleAdd} disabled={adding || !inputValue.trim()}>
-            {adding ? "Adding…" : "Add"}
-          </button>
+      {canControl && room.requests.length > 0 && (
+        <div className="requests">
+          <p className="dj-panel-title">Requests</p>
+          <ul className="dj-list">
+            {room.requests.map((request) => (
+              <li key={request.id} className="request-item">
+                <span className="request-title" title={request.url}>
+                  {request.title}
+                  <em> — {request.requestedByName}</em>
+                </span>
+                <span className="request-actions">
+                  <button className="dj-grant dj-grant--active" onClick={() => approveRequest(request)}>
+                    Add
+                  </button>
+                  <button className="dj-grant" onClick={() => dismissRequest(request.id)}>
+                    No
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-      ) : (
-        <p className="hint">Ask the GM for DJ access to add songs.</p>
       )}
+
+      <div className="add-row">
+        <input
+          type="text"
+          placeholder={
+            canControl
+              ? SPOTIFY_ENABLED
+                ? "Paste a YouTube or Spotify link…"
+                : "Paste a YouTube link…"
+              : "Request a song…"
+          }
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && (canControl ? handleAdd() : handleRequest())}
+        />
+        <button
+          onClick={canControl ? handleAdd : handleRequest}
+          disabled={adding || !inputValue.trim()}
+        >
+          {adding ? "…" : canControl ? "Add" : "Request"}
+        </button>
+      </div>
+      {!canControl && !requestSent && (
+        <p className="hint">Requests go to the GM and DJs to approve.</p>
+      )}
+      {requestSent && <p className="hint hint--dj">Request sent.</p>}
       {addError && <p className="error">{addError}</p>}
 
       {spotifyNotice && (
@@ -300,17 +458,69 @@ export default function App() {
       )}
 
       <ul className="queue">
-        {room.queue.map((item, index) => (
-          <li key={item.id} className={index === room.currentIndex ? "queue-item queue-item--active" : "queue-item"}>
-            <span className="badge">{SOURCE_LABEL[item.link.source]}</span>
-            <button className="queue-title" onClick={() => playAt(index)} disabled={!canControl} title={item.url}>
-              {item.title}
-            </button>
-            <button className="remove" onClick={() => removeAt(index)} disabled={!canControl} title="Remove">
-              ✕
-            </button>
+        {room.queue.map((item, index) => {
+          const isCurrent = index === room.currentIndex;
+          const expandable = isCurrent && currentIsPlaylist && playlistIds.length > 0;
+          return (
+            <li
+              key={item.id}
+              className={[
+                "queue-item",
+                isCurrent ? "queue-item--active" : "",
+                dragIndex === index ? "queue-item--dragging" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              draggable={canControl}
+              onDragStart={() => setDragIndex(index)}
+              onDragOver={(e) => {
+                if (dragIndex !== null) e.preventDefault();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragIndex !== null) moveItem(dragIndex, index);
+                setDragIndex(null);
+              }}
+              onDragEnd={() => setDragIndex(null)}
+            >
+              {canControl && (
+                <span className="drag-handle" title="Drag to reorder">
+                  ⠿
+                </span>
+              )}
+              <span className="badge">{SOURCE_LABEL[item.link.source]}</span>
+              <button className="queue-title" onClick={() => playAt(index)} disabled={!canControl} title={item.url}>
+                {item.title}
+              </button>
+              {expandable && (
+                <button
+                  className="expand"
+                  onClick={() => setShowPlaylist((v) => !v)}
+                  title={showPlaylist ? "Hide playlist contents" : "Show playlist contents"}
+                >
+                  {showPlaylist ? "▾" : "▸"} {playlistIds.length}
+                </button>
+              )}
+              <button className="remove" onClick={() => removeAt(index)} disabled={!canControl} title="Remove">
+                ✕
+              </button>
+            </li>
+          );
+        })}
+
+        {showPlaylist && currentIsPlaylist && (
+          <li className="playlist-contents">
+            <ol>
+              {playlistIds.map((id, i) => (
+                <li key={`${id}-${i}`}>
+                  <a href={`https://www.youtube.com/watch?v=${id}`} target="_blank" rel="noreferrer">
+                    {playlistTitles[id] ?? "Loading…"}
+                  </a>
+                </li>
+              ))}
+            </ol>
           </li>
-        ))}
+        )}
         {room.queue.length === 0 && <li className="queue-empty">Nothing queued yet.</li>}
       </ul>
     </div>

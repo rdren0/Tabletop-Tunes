@@ -1,15 +1,15 @@
 # Tabletop Tunes — Owlbear Rodeo music extension
 
-Paste YouTube links (videos or playlists), queue them up, and play them in
-sync with your party. Playback state lives in the room's metadata, so every
-connected client stays in sync automatically — when the GM hits play or skips
-a track, everyone's popover follows.
+Paste YouTube or Spotify links, queue them up, and play them in sync with your
+party. Playback state lives in the room's metadata, so every connected client
+stays in sync automatically — when the GM hits play or skips a track,
+everyone's popover follows.
 
-**Spotify is currently switched off.** It needs each listener signed into
-their own Spotify account (free accounts hear only 30-second previews), and
-its embed exposes neither volume nor seek control, so it can't participate in
-volume, mute, or position sync. The integration is still in the codebase
-behind the `SPOTIFY_ENABLED` flag in `src/App.tsx` — flip it to re-enable.
+Spotify can be switched off entirely via `SPOTIFY_ENABLED` in `src/config.ts`.
+It needs each listener signed into their own account (free accounts hear only
+30-second previews), and its embed exposes neither volume nor seek control, so
+Spotify tracks sit out volume, mute, and position sync. Whoever adds the first
+Spotify link of a session is warned about this.
 
 ## How it works
 

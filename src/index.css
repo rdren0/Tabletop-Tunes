@@ -349,6 +349,91 @@ body {
   visibility: hidden;
 }
 
+.drag-handle {
+  color: #666;
+  cursor: grab;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.queue-item--dragging {
+  opacity: 0.45;
+}
+
+.expand {
+  background: none;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #bbb;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 5px;
+  flex-shrink: 0;
+}
+
+.playlist-contents {
+  border-left: 2px solid #4a4560;
+  margin: 0 0 4px 18px;
+  padding-left: 8px;
+}
+
+.playlist-contents ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.playlist-contents li {
+  font-size: 12px;
+  color: #b9b9c4;
+}
+
+.playlist-contents a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.playlist-contents a:hover {
+  text-decoration: underline;
+}
+
+.requests {
+  border: 1px solid #3a3a45;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #26262e;
+}
+
+.request-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.request-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-title em {
+  color: #999;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.request-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .queue-empty {
   color: #777;
   font-size: 13px;
