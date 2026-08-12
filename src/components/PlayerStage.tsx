@@ -52,6 +52,8 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
   onEndedRef.current = onEnded;
   const itemRef = useRef(item);
   itemRef.current = item;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
 
   // Create the player once per mount, load the current item once it's ready.
   useEffect(() => {
@@ -78,8 +80,11 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
         events: {
           onReady: () => {
             readyRef.current = true;
+            // A nested iframe only gets autoplay permission if every ancestor
+            // delegates it; harmless when the host frame doesn't.
+            const frame = playerRef.current?.getIframe?.();
+            if (frame) frame.allow = "autoplay; encrypted-media";
             loadCurrentItem();
-            if (isPlaying) playerRef.current?.playVideo();
           },
           onStateChange: (e) => {
             if (e.data === window.YT?.PlayerState.ENDED) onEndedRef.current();
@@ -116,6 +121,9 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
       player.loadVideoById(link.mediaId);
     }
     lastKeyRef.current = mediaKeyOf(itemRef.current);
+    // load*() normally starts playback on its own, but a player that was
+    // paused can come back cued instead — so ask explicitly.
+    if (isPlayingRef.current) player.playVideo();
   }
 
   // React to the queue item changing.

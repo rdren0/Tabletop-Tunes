@@ -19,6 +19,9 @@ body {
   height: 100vh;
   padding: 10px;
   gap: 10px;
+  /* Nothing should ever scroll sideways inside the popover. */
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .app--loading {
@@ -64,6 +67,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* The popover is only ~380px wide; wrap rather than force a page scrollbar. */
+  flex-wrap: wrap;
 }
 
 .transport button {
@@ -86,12 +91,28 @@ body {
   color: #ff8080;
 }
 
+.transport button.clear--confirm {
+  border-color: #ff8080;
+  background: #5a2626;
+  color: #ffdada;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .volume {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-left: auto;
   font-size: 14px;
+  /* Shrink to whatever space is left instead of pushing the row wider. */
+  flex: 1 1 110px;
+  min-width: 0;
+}
+
+.volume input {
+  flex: 1;
+  min-width: 0;
 }
 
 .hint {

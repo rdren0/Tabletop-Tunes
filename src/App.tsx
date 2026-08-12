@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useIsGM, useObrReady, usePlayerId, useParty, useRoomState } from "./lib/useOwlbear";
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
@@ -6,7 +6,7 @@ import { PlayerStage } from "./components/PlayerStage";
 import { QueueItem } from "./types";
 
 const SOURCE_LABEL: Record<string, string> = {
-  youtube: "YT",
+  youtube: "YouTube",
   spotify: "Spotify",
 };
 
@@ -21,6 +21,15 @@ export default function App() {
   const [adding, setAdding] = useState(false);
   const [volume, setVolume] = useState(70);
   const [showDjPanel, setShowDjPanel] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  // Clearing wipes the queue for everyone, so it takes two clicks. Forget the
+  // pending confirmation if the second click doesn't come promptly.
+  useEffect(() => {
+    if (!confirmClear) return;
+    const timer = setTimeout(() => setConfirmClear(false), 5000);
+    return () => clearTimeout(timer);
+  }, [confirmClear]);
 
   const isDJ = !!playerId && room.djIds.includes(playerId);
   const canControl = isGM || isDJ;
@@ -92,6 +101,16 @@ export default function App() {
     patchRoom({ queue: nextQueue, currentIndex: nextIndex, isPlaying: nextPlaying });
   }
 
+  function handleClearClick() {
+    if (!canControl) return;
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    setConfirmClear(false);
+    clearQueue();
+  }
+
   function clearQueue() {
     if (!canControl) return;
     // Dropping currentIndex back to -1 unmounts the embed entirely, so the
@@ -99,10 +118,24 @@ export default function App() {
     patchRoom({ queue: [], currentIndex: -1, isPlaying: false });
   }
 
+  /**
+   * Exactly one client drives the queue forward, otherwise every controller
+   * would skip on the same "ended" event and jump several tracks at once. The
+   * GM owns that job; if no GM is connected the lowest-sorted connected DJ
+   * takes over, so the list keeps playing instead of stalling.
+   */
+  function isAdvancer(): boolean {
+    if (isGM) return true;
+    if (party.some((p) => p.role === "GM")) return false;
+    if (!playerId || !isDJ) return false;
+    const connectedDjs = [playerId, ...party.map((p) => p.id)]
+      .filter((id) => room.djIds.includes(id))
+      .sort();
+    return connectedDjs[0] === playerId;
+  }
+
   function handleEnded() {
-    // Only the GM's client advances the shared queue, so multiple connected
-    // players don't each independently skip the track on end.
-    if (!isGM) return;
+    if (!isAdvancer()) return;
     if (room.queue.length === 0) return;
     const next = (room.currentIndex + 1) % room.queue.length;
     patchRoom({ currentIndex: next, isPlaying: true });
@@ -127,12 +160,16 @@ export default function App() {
           ⏭
         </button>
         <button
-          className="clear"
-          onClick={clearQueue}
+          className={confirmClear ? "clear clear--confirm" : "clear"}
+          onClick={handleClearClick}
           disabled={!canControl || room.queue.length === 0}
-          title="Clear the queue and stop playback"
+          title={
+            confirmClear
+              ? "Click again to clear the queue for everyone"
+              : "Clear the queue and stop playback"
+          }
         >
-          🗑
+          {confirmClear ? "Clear all?" : "🗑"}
         </button>
         <label className="volume">
           🔊
@@ -150,13 +187,7 @@ export default function App() {
           </button>
         )}
       </div>
-      {!canControl && (
-        <p className="hint">
-          {room.djIds.length > 0
-            ? "Only the GM and DJs can control playback — you'll hear what they play."
-            : "Only the GM can control playback — you'll hear what they play."}
-        </p>
-      )}
+      {!canControl && <p className="hint">Listening only.</p>}
       {!isGM && isDJ && <p className="hint hint--dj">You have DJ privileges 🎧</p>}
 
       {isGM && showDjPanel && (
@@ -200,11 +231,7 @@ export default function App() {
           </button>
         </div>
       ) : (
-        <p className="hint">
-          {room.djIds.length > 0
-            ? "Only the GM and DJs can add songs."
-            : "Only the GM can add songs — ask them for DJ privileges to add your own."}
-        </p>
+        <p className="hint">Ask the GM for DJ access to add songs.</p>
       )}
       {addError && <p className="error">{addError}</p>}
 

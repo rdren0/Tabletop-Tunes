@@ -36,6 +36,7 @@ declare global {
     pauseVideo(): void;
     loadVideoById(id: string): void;
     loadPlaylist(options: { list: string }): void;
+    getIframe?(): HTMLIFrameElement | null;
     destroy(): void;
   }
 
