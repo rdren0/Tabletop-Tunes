@@ -2,11 +2,23 @@
   command = "npm run build"
   publish = "dist"
 
-# Owlbear Rodeo's client fetches your manifest cross-origin. OBR's requests are
-# "safe" so this usually isn't required, but it costs nothing and removes the
-# most common "extension won't install" failure.
+# Owlbear Rodeo fetches the manifest AND the icons it references cross-origin
+# from its own domain, so every one of them needs CORS - scoping this to the
+# manifest alone is what left the action-bar icon failing to load. Everything
+# here is public static content, so a blanket allow is safe.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+
 [[headers]]
   for = "/manifest.json"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*.svg"
   [headers.values]
     Access-Control-Allow-Origin = "*"
     Cache-Control = "public, max-age=0, must-revalidate"
