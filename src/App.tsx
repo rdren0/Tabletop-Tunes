@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useIsGM, useObrReady, usePlayerId, useParty, useRoomState } from "./lib/useOwlbear";
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
@@ -23,6 +23,10 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [showDjPanel, setShowDjPanel] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [spotifyNotice, setSpotifyNotice] = useState(false);
+  // Warn once per popover session, so it lands the first time it matters
+  // without nagging on every Spotify link that follows.
+  const spotifyWarned = useRef(false);
 
   // Clearing wipes the queue for everyone, so it takes two clicks. Forget the
   // pending confirmation if the second click doesn't come promptly.
@@ -69,6 +73,10 @@ export default function App() {
       currentIndex: isFirstItem ? 0 : room.currentIndex,
       isPlaying: isFirstItem ? true : room.isPlaying,
     });
+    if (link.source === "spotify" && !spotifyWarned.current) {
+      spotifyWarned.current = true;
+      setSpotifyNotice(true);
+    }
     setInputValue("");
     setAdding(false);
   }
@@ -265,6 +273,18 @@ export default function App() {
         <p className="hint">Ask the GM for DJ access to add songs.</p>
       )}
       {addError && <p className="error">{addError}</p>}
+
+      {spotifyNotice && (
+        <div className="notice">
+          <span>
+            Heads up: Spotify only plays for listeners signed into their own account, and free
+            accounts hear 30-second previews. YouTube plays for everyone.
+          </span>
+          <button className="notice-dismiss" onClick={() => setSpotifyNotice(false)} title="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
 
       <ul className="queue">
         {room.queue.map((item, index) => (

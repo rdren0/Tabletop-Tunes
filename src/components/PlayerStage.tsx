@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadScriptOnce } from "../lib/loadScript";
 import { QueueItem } from "../types";
 
@@ -67,6 +67,22 @@ function YouTubeStage({
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
+  // Browsers refuse programmatic playback until the listener has interacted
+  // with the page, so a client that just opened the popover can stay silent
+  // while everyone else is hearing the track. Detect that and offer a tap.
+  const [needsGesture, setNeedsGesture] = useState(false);
+
+  function requestPlay() {
+    const player = playerRef.current;
+    if (!player) return;
+    player.playVideo();
+    window.setTimeout(() => {
+      if (!isPlayingRef.current || !playerRef.current) return;
+      const state = playerRef.current.getPlayerState?.();
+      if (state !== window.YT?.PlayerState.PLAYING) setNeedsGesture(true);
+    }, 1500);
+  }
+
   /** Push the current audio settings at the player, whenever it's able to take them. */
   function applyAudio() {
     const player = playerRef.current;
@@ -111,6 +127,7 @@ function YouTubeStage({
             loadCurrentItem();
           },
           onStateChange: (e) => {
+            if (e.data === window.YT?.PlayerState.PLAYING) setNeedsGesture(false);
             if (e.data === window.YT?.PlayerState.ENDED) onEndedRef.current();
           },
         },
@@ -147,7 +164,7 @@ function YouTubeStage({
     lastKeyRef.current = mediaKeyOf(itemRef.current);
     // load*() normally starts playback on its own, but a player that was
     // paused can come back cued instead — so ask explicitly.
-    if (isPlayingRef.current) player.playVideo();
+    if (isPlayingRef.current) requestPlay();
   }
 
   // React to the queue item changing.
@@ -160,11 +177,16 @@ function YouTubeStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaKey]);
 
-  // React to play/pause toggles.
+  // React to play/pause toggles the GM or a DJ made for the whole room.
   useEffect(() => {
     if (!readyRef.current) return;
-    if (isPlaying) playerRef.current?.playVideo();
-    else playerRef.current?.pauseVideo();
+    if (isPlaying) {
+      requestPlay();
+    } else {
+      setNeedsGesture(false);
+      playerRef.current?.pauseVideo();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying]);
 
   // Volume and mute are per-client, never shared through room metadata.
@@ -174,9 +196,25 @@ function YouTubeStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [volume, muted]);
 
-  // Deliberately childless in JSX: the embed lives in a plain DOM node created
-  // in the effect above, outside React's control.
-  return <div className="player-stage player-stage--youtube" ref={containerRef} />;
+  // The mount node is deliberately childless in JSX: the embed lives in a plain
+  // DOM node created in the effect above, outside React's control. The overlay
+  // is a sibling of that node, so React never has to reconcile around it.
+  return (
+    <div className="player-stage player-stage--youtube">
+      <div className="player-mount" ref={containerRef} />
+      {needsGesture && (
+        <button
+          className="tap-to-play"
+          onClick={() => {
+            setNeedsGesture(false);
+            playerRef.current?.playVideo();
+          }}
+        >
+          ▶ Tap to start audio
+        </button>
+      )}
+    </div>
+  );
 }
 
 function SpotifyStage({

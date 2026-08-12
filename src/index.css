@@ -43,14 +43,27 @@ body {
   aspect-ratio: 16 / 9;
   min-height: 0;
   flex-shrink: 0;
+  position: relative;
 }
 
-.player-stage--youtube > div,
+.player-stage--youtube .player-mount,
 .player-stage--youtube iframe {
   display: block;
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+/* Shown only when the browser refuses to start playback without a gesture. */
+.tap-to-play {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: rgba(15, 15, 20, 0.82);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 .player-stage--empty {
@@ -246,6 +259,31 @@ body {
   color: #ff8080;
   font-size: 12px;
   margin: -4px 0 0;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: -4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #4a4436;
+  background: #33301f;
+  color: #f0e2b6;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.notice-dismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 0 2px;
+  flex-shrink: 0;
+  font-size: 12px;
 }
 
 .queue {

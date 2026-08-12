@@ -37,6 +37,7 @@ declare global {
     loadVideoById(id: string): void;
     loadPlaylist(options: { list: string }): void;
     getIframe?(): HTMLIFrameElement | null;
+    getPlayerState?(): number;
     setVolume?(volume: number): void;
     mute?(): void;
     unMute?(): void;
