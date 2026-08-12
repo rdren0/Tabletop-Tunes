@@ -1,0 +1,15 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Owlbear Rodeo's client fetches your manifest cross-origin. OBR's requests are
+# "safe" so this usually isn't required, but it costs nothing and removes the
+# most common "extension won't install" failure.
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# The extension runs inside an OBR iframe — never send X-Frame-Options or a
+# restrictive frame-ancestors CSP here, or the popover will render blank.

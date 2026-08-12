@@ -4,6 +4,8 @@
   "manifest_version": 1,
   "author": "Rachael",
   "description": "Queue and play YouTube and Spotify links in sync with your party.",
+  "homepage_url": "https://tabletoptunes.netlify.app",
+  "icon": "https://tabletoptunes.netlify.app/icon.svg",
   "action": {
     "title": "Tabletop Tunes",
     "icon": "/icon.svg",
