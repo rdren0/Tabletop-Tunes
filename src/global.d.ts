@@ -8,6 +8,10 @@ declare global {
         element: HTMLElement,
         options: {
           videoId?: string;
+          // The API writes these onto the iframe it generates; "100%" lets the
+          // styled wrapper drive the size instead of YouTube's 640x390 default.
+          width?: string | number;
+          height?: string | number;
           playerVars?: Record<string, unknown>;
           events?: {
             onReady?: (event: { target: YTPlayer }) => void;

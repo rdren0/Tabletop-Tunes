@@ -6,6 +6,7 @@ const FALLBACKS: Record<string, string> = {
   "spotify:track": "Spotify track",
   "spotify:playlist": "Spotify playlist",
   "spotify:album": "Spotify album",
+  "spotify:artist": "Spotify artist",
 };
 
 /**

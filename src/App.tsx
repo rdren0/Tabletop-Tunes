@@ -36,7 +36,9 @@ export default function App() {
     if (!canControl) return;
     const link = parseLink(inputValue);
     if (!link) {
-      setAddError("That link isn't a YouTube or Spotify video/playlist link.");
+      setAddError(
+        "Unrecognized link. Use a YouTube video/playlist, or a Spotify track, album, playlist, or artist."
+      );
       return;
     }
     setAddError(null);

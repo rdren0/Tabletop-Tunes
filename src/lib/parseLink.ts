@@ -3,7 +3,16 @@ export type ParsedLink =
   | { source: "youtube"; kind: "playlist"; mediaId: string }
   | { source: "spotify"; kind: "track"; mediaId: string }
   | { source: "spotify"; kind: "playlist"; mediaId: string }
-  | { source: "spotify"; kind: "album"; mediaId: string };
+  | { source: "spotify"; kind: "album"; mediaId: string }
+  | { source: "spotify"; kind: "artist"; mediaId: string };
+
+/** Spotify entity types the iframe embed can play. */
+const SPOTIFY_KINDS = ["track", "playlist", "album", "artist"] as const;
+type SpotifyKind = (typeof SPOTIFY_KINDS)[number];
+
+function isSpotifyKind(value: string | undefined): value is SpotifyKind {
+  return !!value && (SPOTIFY_KINDS as readonly string[]).includes(value);
+}
 
 /**
  * Accepts a pasted YouTube or Spotify URL (or bare Spotify URI) and returns
@@ -14,10 +23,9 @@ export function parseLink(raw: string): ParsedLink | null {
   if (!input) return null;
 
   // Spotify URIs, e.g. spotify:track:4uLU6hMCjMI75M1A2tKUQC
-  const uriMatch = input.match(/^spotify:(track|playlist|album):([a-zA-Z0-9]+)/);
-  if (uriMatch) {
-    const kind = uriMatch[1] as "track" | "playlist" | "album";
-    return { source: "spotify", kind, mediaId: uriMatch[2] };
+  const uriMatch = input.match(/^spotify:(track|playlist|album|artist):([a-zA-Z0-9]+)/);
+  if (uriMatch && isSpotifyKind(uriMatch[1])) {
+    return { source: "spotify", kind: uriMatch[1], mediaId: uriMatch[2] };
   }
 
   let url: URL;
@@ -68,10 +76,7 @@ export function parseLink(raw: string): ParsedLink | null {
     const parts = url.pathname.split("/").filter(Boolean);
     const withoutLocale = parts[0]?.startsWith("intl-") ? parts.slice(1) : parts;
     const [kindPart, idPart] = withoutLocale;
-    if (
-      (kindPart === "track" || kindPart === "playlist" || kindPart === "album") &&
-      idPart
-    ) {
+    if (isSpotifyKind(kindPart) && idPart) {
       // Strip any trailing query-string artifacts from copy-pasted share links
       const mediaId = idPart.split("?")[0];
       return { source: "spotify", kind: kindPart, mediaId };

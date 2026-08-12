@@ -59,6 +59,8 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
       if (cancelled || !containerRef.current || !window.YT) return;
 
       playerRef.current = new window.YT.Player(containerRef.current, {
+        width: "100%",
+        height: "100%",
         playerVars: { playsinline: 1 },
         events: {
           onReady: () => {
@@ -117,7 +119,13 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
     anyPlayer?.setVolume?.(volume);
   }, [volume]);
 
-  return <div className="player-stage" ref={containerRef} />;
+  // The YouTube API *replaces* the element it's handed with its own iframe, so
+  // the styled wrapper has to be an outer element the API never touches.
+  return (
+    <div className="player-stage player-stage--youtube">
+      <div ref={containerRef} />
+    </div>
+  );
 }
 
 function SpotifyStage({
