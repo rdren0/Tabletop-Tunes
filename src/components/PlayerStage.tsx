@@ -6,6 +6,7 @@ interface PlayerStageProps {
   item: QueueItem | null;
   isPlaying: boolean;
   volume: number; // 0-100, YouTube only; Spotify embeds don't expose volume control
+  muted: boolean; // likewise YouTube only
   onEnded: () => void;
 }
 
@@ -15,7 +16,7 @@ interface PlayerStageProps {
  * when the underlying media id actually changes, so scrubby state changes
  * (e.g. two clients patching room metadata close together) don't restart playback.
  */
-export function PlayerStage({ item, isPlaying, volume, onEnded }: PlayerStageProps) {
+export function PlayerStage({ item, isPlaying, volume, muted, onEnded }: PlayerStageProps) {
   if (!item) {
     return (
       <div className="player-stage player-stage--empty">
@@ -31,6 +32,7 @@ export function PlayerStage({ item, isPlaying, volume, onEnded }: PlayerStagePro
         item={item}
         isPlaying={isPlaying}
         volume={volume}
+        muted={muted}
         onEnded={onEnded}
       />
     );
@@ -44,7 +46,13 @@ function mediaKeyOf(item: QueueItem): string {
   return item.link.kind === "playlist" ? `pl:${item.link.mediaId}` : `v:${item.link.mediaId}`;
 }
 
-function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProps, "item"> & { item: QueueItem }) {
+function YouTubeStage({
+  item,
+  isPlaying,
+  volume,
+  muted,
+  onEnded,
+}: Omit<PlayerStageProps, "item"> & { item: QueueItem }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const readyRef = useRef(false);
@@ -54,6 +62,19 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
   itemRef.current = item;
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
+
+  /** Push the current audio settings at the player, whenever it's able to take them. */
+  function applyAudio() {
+    const player = playerRef.current;
+    if (!player) return;
+    player.setVolume?.(volumeRef.current);
+    if (mutedRef.current) player.mute?.();
+    else player.unMute?.();
+  }
 
   // Create the player once per mount, load the current item once it's ready.
   useEffect(() => {
@@ -84,6 +105,9 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
             // delegates it; harmless when the host frame doesn't.
             const frame = playerRef.current?.getIframe?.();
             if (frame) frame.allow = "autoplay; encrypted-media";
+            // Apply audio settings here too: the player ignores them until it
+            // exists, so anything set before this point never reached it.
+            applyAudio();
             loadCurrentItem();
           },
           onStateChange: (e) => {
@@ -143,11 +167,12 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
     else playerRef.current?.pauseVideo();
   }, [isPlaying]);
 
-  // Volume is per-client, applied directly on the underlying <video> the API manages.
+  // Volume and mute are per-client, never shared through room metadata.
   useEffect(() => {
-    const anyPlayer = playerRef.current as unknown as { setVolume?: (v: number) => void };
-    anyPlayer?.setVolume?.(volume);
-  }, [volume]);
+    if (!readyRef.current) return;
+    applyAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volume, muted]);
 
   // Deliberately childless in JSX: the embed lives in a plain DOM node created
   // in the effect above, outside React's control.
@@ -158,7 +183,7 @@ function SpotifyStage({
   item,
   isPlaying,
   onEnded,
-}: Omit<PlayerStageProps, "volume" | "item"> & { item: QueueItem }) {
+}: Omit<PlayerStageProps, "volume" | "muted" | "item"> & { item: QueueItem }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<SpotifyEmbedController | null>(null);
   const readyRef = useRef(false);

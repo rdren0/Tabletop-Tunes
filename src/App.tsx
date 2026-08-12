@@ -20,6 +20,7 @@ export default function App() {
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [volume, setVolume] = useState(70);
+  const [muted, setMuted] = useState(false);
   const [showDjPanel, setShowDjPanel] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -34,6 +35,8 @@ export default function App() {
   const isDJ = !!playerId && room.djIds.includes(playerId);
   const canControl = isGM || isDJ;
   const currentItem = room.currentIndex >= 0 ? room.queue[room.currentIndex] ?? null : null;
+  // Spotify's embed exposes no volume API, so the controls would silently lie.
+  const spotifyActive = currentItem?.link.source === "spotify";
 
   function setDJ(id: string, granted: boolean) {
     if (!isGM) return;
@@ -147,7 +150,13 @@ export default function App() {
 
   return (
     <div className="app">
-      <PlayerStage item={currentItem} isPlaying={room.isPlaying} volume={volume} onEnded={handleEnded} />
+      <PlayerStage
+        item={currentItem}
+        isPlaying={room.isPlaying}
+        volume={volume}
+        muted={muted}
+        onEnded={handleEnded}
+      />
 
       <div className="transport">
         <button onClick={() => skip(-1)} disabled={!canControl || room.queue.length === 0} title="Previous">
@@ -171,24 +180,46 @@ export default function App() {
         >
           {confirmClear ? "Clear all?" : "🗑"}
         </button>
-        <label className="volume">
-          🔊
+        <div className="volume">
+          <button
+            type="button"
+            className="mute"
+            onClick={() => setMuted((m) => !m)}
+            disabled={spotifyActive}
+            title={
+              spotifyActive
+                ? "Spotify volume is controlled from your own Spotify app"
+                : muted
+                  ? "Unmute"
+                  : "Mute"
+            }
+          >
+            {muted || volume === 0 ? "🔇" : "🔊"}
+          </button>
           <input
             type="range"
             min={0}
             max={100}
-            value={volume}
-            onChange={(e) => setVolume(Number(e.target.value))}
+            value={muted ? 0 : volume}
+            disabled={spotifyActive}
+            onChange={(e) => {
+              setVolume(Number(e.target.value));
+              setMuted(false);
+            }}
           />
-        </label>
+        </div>
         {isGM && (
-          <button className="dj-toggle" onClick={() => setShowDjPanel((v) => !v)} title="Manage DJ privileges">
-            🎧
+          <button
+            className={showDjPanel ? "dj-toggle dj-toggle--open" : "dj-toggle"}
+            onClick={() => setShowDjPanel((v) => !v)}
+            title="Manage who can control the music (GM only)"
+          >
+            ⚙
           </button>
         )}
       </div>
       {!canControl && <p className="hint">Listening only.</p>}
-      {!isGM && isDJ && <p className="hint hint--dj">You have DJ privileges 🎧</p>}
+      {!isGM && isDJ && <p className="hint hint--dj">You have DJ access.</p>}
 
       {isGM && showDjPanel && (
         <div className="dj-panel">
