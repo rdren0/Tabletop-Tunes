@@ -39,12 +39,19 @@ export function PlayerStage({ item, isPlaying, volume, onEnded }: PlayerStagePro
   return <SpotifyStage key="spotify-stage" item={item} isPlaying={isPlaying} onEnded={onEnded} />;
 }
 
+/** Identifies the underlying media, so re-renders only reload on a real change. */
+function mediaKeyOf(item: QueueItem): string {
+  return item.link.kind === "playlist" ? `pl:${item.link.mediaId}` : `v:${item.link.mediaId}`;
+}
+
 function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProps, "item"> & { item: QueueItem }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const readyRef = useRef(false);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
+  const itemRef = useRef(item);
+  itemRef.current = item;
 
   // Create the player once per mount, load the current item once it's ready.
   useEffect(() => {
@@ -58,7 +65,13 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
       });
       if (cancelled || !containerRef.current || !window.YT) return;
 
-      playerRef.current = new window.YT.Player(containerRef.current, {
+      // The YouTube API replaces the element it's given. Hand it a detached
+      // child React never rendered, so React isn't left trying to remove a
+      // node that no longer exists (which throws and blanks the whole app).
+      const mount = document.createElement("div");
+      containerRef.current.appendChild(mount);
+
+      playerRef.current = new window.YT.Player(mount, {
         width: "100%",
         height: "100%",
         playerVars: { playsinline: 1 },
@@ -78,30 +91,39 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
     init();
     return () => {
       cancelled = true;
-      playerRef.current?.destroy();
+      try {
+        playerRef.current?.destroy();
+      } catch {
+        // The API throws if its iframe is already gone; nothing to clean up.
+      }
       playerRef.current = null;
       readyRef.current = false;
+      containerRef.current?.replaceChildren();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Always load whatever is selected *now*: onReady fires long after mount, so
+  // reading `item` from that closure would replay the track that was current
+  // when the player was created, not the one the user just clicked.
   function loadCurrentItem() {
     const player = playerRef.current;
     if (!player) return;
-    if (item.link.kind === "playlist") {
-      player.loadPlaylist({ list: item.link.mediaId });
+    const { link } = itemRef.current;
+    if (link.kind === "playlist") {
+      player.loadPlaylist({ list: link.mediaId });
     } else {
-      player.loadVideoById(item.link.mediaId);
+      player.loadVideoById(link.mediaId);
     }
+    lastKeyRef.current = mediaKeyOf(itemRef.current);
   }
 
   // React to the queue item changing.
-  const mediaKey = item.link.kind === "playlist" ? `pl:${item.link.mediaId}` : `v:${item.link.mediaId}`;
+  const mediaKey = mediaKeyOf(item);
   const lastKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!readyRef.current) return;
     if (lastKeyRef.current === mediaKey) return;
-    lastKeyRef.current = mediaKey;
     loadCurrentItem();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaKey]);
@@ -119,13 +141,9 @@ function YouTubeStage({ item, isPlaying, volume, onEnded }: Omit<PlayerStageProp
     anyPlayer?.setVolume?.(volume);
   }, [volume]);
 
-  // The YouTube API *replaces* the element it's handed with its own iframe, so
-  // the styled wrapper has to be an outer element the API never touches.
-  return (
-    <div className="player-stage player-stage--youtube">
-      <div ref={containerRef} />
-    </div>
-  );
+  // Deliberately childless in JSX: the embed lives in a plain DOM node created
+  // in the effect above, outside React's control.
+  return <div className="player-stage player-stage--youtube" ref={containerRef} />;
 }
 
 function SpotifyStage({
@@ -152,7 +170,12 @@ function SpotifyStage({
       });
       if (cancelled || !containerRef.current) return;
 
-      IFrameAPI.createController(containerRef.current, { uri, width: "100%", height: 152 }, (controller) => {
+      // Same story as YouTube: Spotify swaps out the element it's handed, so
+      // it gets a detached node instead of one React is tracking.
+      const mount = document.createElement("div");
+      containerRef.current.appendChild(mount);
+
+      IFrameAPI.createController(mount, { uri, width: "100%", height: 152 }, (controller) => {
         if (cancelled) return;
         controllerRef.current = controller;
         readyRef.current = true;
@@ -171,9 +194,15 @@ function SpotifyStage({
     init();
     return () => {
       cancelled = true;
-      controllerRef.current?.destroy();
+      try {
+        controllerRef.current?.destroy();
+      } catch {
+        // Controller already torn down; safe to ignore.
+      }
       controllerRef.current = null;
       readyRef.current = false;
+      lastNearEndRef.current = false;
+      containerRef.current?.replaceChildren();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uri]);

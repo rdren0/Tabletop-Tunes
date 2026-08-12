@@ -81,6 +81,11 @@ body {
   cursor: default;
 }
 
+.transport button.clear:not(:disabled):hover {
+  border-color: #ff8080;
+  color: #ff8080;
+}
+
 .volume {
   display: flex;
   align-items: center;

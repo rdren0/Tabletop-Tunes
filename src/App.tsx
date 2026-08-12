@@ -92,6 +92,13 @@ export default function App() {
     patchRoom({ queue: nextQueue, currentIndex: nextIndex, isPlaying: nextPlaying });
   }
 
+  function clearQueue() {
+    if (!canControl) return;
+    // Dropping currentIndex back to -1 unmounts the embed entirely, so the
+    // stage returns to its empty state rather than holding the last track.
+    patchRoom({ queue: [], currentIndex: -1, isPlaying: false });
+  }
+
   function handleEnded() {
     // Only the GM's client advances the shared queue, so multiple connected
     // players don't each independently skip the track on end.
@@ -118,6 +125,14 @@ export default function App() {
         </button>
         <button onClick={() => skip(1)} disabled={!canControl || room.queue.length === 0} title="Next">
           ⏭
+        </button>
+        <button
+          className="clear"
+          onClick={clearQueue}
+          disabled={!canControl || room.queue.length === 0}
+          title="Clear the queue and stop playback"
+        >
+          🗑
         </button>
         <label className="volume">
           🔊
