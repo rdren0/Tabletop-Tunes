@@ -1,6 +1,6 @@
 {
   "name": "Tabletop Tunes",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "manifest_version": 1,
   "author": "Rachael",
   "description": "Queue and play YouTube and Spotify links in sync with your party.",
@@ -8,7 +8,7 @@
   "icon": "https://tabletoptunes.netlify.app/store-icon.svg",
   "action": {
     "title": "Tabletop Tunes",
-    "icon": "/icon.svg",
+    "icon": "https://tabletoptunes.netlify.app/icon.svg",
     "popover": "/",
     "height": 640,
     "width": 380
