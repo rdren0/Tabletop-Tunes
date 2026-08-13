@@ -9,8 +9,10 @@ import {
 } from "./lib/useOwlbear";
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
-import { PlayerControls, PlayerStage } from "./components/PlayerStage";
-import { QueueItem, SongRequest } from "./types";
+import { PlayerStage } from "./components/PlayerStage";
+import { AmbienceStage } from "./components/AmbienceStage";
+import { unmuteAll } from "./lib/audioGestures";
+import { AmbienceStream, QueueItem, SongRequest } from "./types";
 import { SPOTIFY_ENABLED } from "./config";
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -42,16 +44,17 @@ export default function App() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [requestSent, setRequestSent] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [showAmbience, setShowAmbience] = useState(false);
+  const [ambienceInput, setAmbienceInput] = useState("");
+  const [ambienceError, setAmbienceError] = useState<string | null>(null);
   const [playlistIds, setPlaylistIds] = useState<string[]>([]);
   const [playlistTitles, setPlaylistTitles] = useState<Record<string, string>>({});
   // This client's live playback position, kept out of state so the 2s
   // heartbeat doesn't re-render the whole popover.
   const positionRef = useRef(0);
-  const playerControls = useRef<PlayerControls | null>(null);
-
   /** Unmute inside the click itself, then let state follow. */
   function unmuteNow() {
-    playerControls.current?.unmuteWithGesture();
+    unmuteAll();
     setMuted(false);
     setAutoMuted(false);
   }
@@ -290,6 +293,40 @@ export default function App() {
     });
   }
 
+  /** Ambience is YouTube-only: it needs looping and volume, which Spotify lacks. */
+  async function addAmbience() {
+    if (!canControl) return;
+    const link = parseLink(ambienceInput);
+    if (!link || link.source !== "youtube" || link.kind !== "video") {
+      setAmbienceError("Ambience needs a single YouTube video link.");
+      return;
+    }
+    setAmbienceError(null);
+    const title = await fetchTitle(ambienceInput, link);
+    const stream: AmbienceStream = {
+      id: crypto.randomUUID(),
+      url: ambienceInput.trim(),
+      title,
+      videoId: link.mediaId,
+      volume: 50,
+      playing: false,
+    };
+    patchRoom({ ambience: [...room.ambience, stream] });
+    setAmbienceInput("");
+  }
+
+  function updateAmbience(id: string, patch: Partial<AmbienceStream>) {
+    if (!canControl) return;
+    patchRoom({
+      ambience: room.ambience.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    });
+  }
+
+  function removeAmbience(id: string) {
+    if (!canControl) return;
+    patchRoom({ ambience: room.ambience.filter((s) => s.id !== id) });
+  }
+
   function dismissRequest(id: string) {
     if (!canControl) return;
     patchRoom({ requests: room.requests.filter((r) => r.id !== id) });
@@ -315,7 +352,6 @@ export default function App() {
           setMuted(true);
           setAutoMuted(true);
         }}
-        controlsRef={playerControls}
         onPlaylistLoaded={setPlaylistIds}
         onEnded={handleEnded}
       />
@@ -373,6 +409,13 @@ export default function App() {
             }}
           />
         </div>
+        <button
+          className={showAmbience ? "dj-toggle dj-toggle--open" : "dj-toggle"}
+          onClick={() => setShowAmbience((v) => !v)}
+          title="Ambience — looping sounds that layer under the queue"
+        >
+          🌧
+        </button>
         {isGM && (
           <button
             className={showDjPanel ? "dj-toggle dj-toggle--open" : "dj-toggle"}
@@ -383,6 +426,8 @@ export default function App() {
           </button>
         )}
       </div>
+      <AmbienceStage streams={room.ambience} masterVolume={volume} muted={muted} />
+
       {autoMuted && muted && (
         <p className="hint hint--dj">Your browser blocked audio — tap 🔇 to hear it.</p>
       )}
@@ -413,6 +458,67 @@ export default function App() {
                 );
               })}
           </ul>
+        </div>
+      )}
+
+      {showAmbience && (
+        <div className="dj-panel">
+          <p className="dj-panel-title">Ambience</p>
+          {room.ambience.length === 0 && (
+            <p className="dj-panel-empty">
+              Looping sounds that play under the queue — rain, a tavern, distant drums.
+            </p>
+          )}
+          <ul className="dj-list">
+            {room.ambience.map((stream) => (
+              <li key={stream.id} className="ambience-item">
+                <button
+                  className={stream.playing ? "amb-toggle amb-toggle--on" : "amb-toggle"}
+                  onClick={() => updateAmbience(stream.id, { playing: !stream.playing })}
+                  disabled={!canControl}
+                  title={stream.playing ? "Stop" : "Play"}
+                >
+                  {stream.playing ? "◼" : "▶"}
+                </button>
+                <span className="ambience-title" title={stream.url}>
+                  {stream.title}
+                </span>
+                <input
+                  className="ambience-volume"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={stream.volume}
+                  disabled={!canControl}
+                  title="Level in the mix (shared)"
+                  onChange={(e) => updateAmbience(stream.id, { volume: Number(e.target.value) })}
+                />
+                <button
+                  className="remove"
+                  onClick={() => removeAmbience(stream.id)}
+                  disabled={!canControl}
+                  title="Remove"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+          {canControl && (
+            <div className="add-row add-row--ambience">
+              <input
+                type="text"
+                placeholder="YouTube link to loop…"
+                value={ambienceInput}
+                onChange={(e) => setAmbienceInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addAmbience()}
+              />
+              <button onClick={addAmbience} disabled={!ambienceInput.trim()}>
+                Add
+              </button>
+            </div>
+          )}
+          {ambienceError && <p className="error">{ambienceError}</p>}
         </div>
       )}
 

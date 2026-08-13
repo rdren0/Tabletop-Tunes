@@ -401,6 +401,64 @@ body {
   text-decoration: underline;
 }
 
+/* Ambience players are audio-only, but parking them at 1px rather than
+   display:none keeps browsers willing to play them. */
+.ambience-stage {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  flex-shrink: 0;
+  opacity: 0.01;
+  pointer-events: none;
+}
+
+.ambience-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ambience-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ambience-volume {
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.amb-toggle {
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid #555;
+  background: #33333e;
+  color: #ddd;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.amb-toggle--on {
+  border-color: #7c5cfc;
+  background: #7c5cfc;
+  color: #fff;
+}
+
+.amb-toggle:disabled,
+.ambience-volume:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.add-row--ambience {
+  margin-top: 8px;
+}
+
 .requests {
   border: 1px solid #3a3a45;
   border-radius: 8px;

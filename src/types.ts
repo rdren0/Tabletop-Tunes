@@ -13,12 +13,27 @@ export interface SongRequest extends QueueItem {
   requestedByName: string;
 }
 
+/**
+ * A looping background sound that plays *alongside* the queue — rain, a tavern,
+ * combat drums. Several can run at once, and unlike listener volume, each
+ * stream's level is part of the shared mix the GM builds.
+ */
+export interface AmbienceStream {
+  id: string;
+  url: string;
+  title: string;
+  videoId: string;
+  volume: number; // 0-100, relative level within the mix
+  playing: boolean;
+}
+
 export interface RoomState {
   queue: QueueItem[];
   currentIndex: number; // -1 if nothing is loaded
   isPlaying: boolean;
   djIds: string[]; // player ids granted DJ privileges by the GM, in addition to the GM
   requests: SongRequest[]; // pending listener suggestions
+  ambience: AmbienceStream[]; // looping beds that play under the queue
   /**
    * Where playback was at `anchorAt`, in seconds into the current track.
    * Clients extrapolate from this pair to stay roughly in step: while playing,
@@ -35,6 +50,7 @@ export const EMPTY_ROOM_STATE: RoomState = {
   isPlaying: false,
   djIds: [],
   requests: [],
+  ambience: [],
   anchorPosition: 0,
   anchorAt: 0,
   updatedAt: 0,
