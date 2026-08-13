@@ -402,14 +402,50 @@ body {
 }
 
 /* Ambience players are audio-only, but parking them at 1px rather than
-   display:none keeps browsers willing to play them. */
+   display:none keeps browsers willing to play them. They grow into real,
+   clickable embeds only when a browser refuses to start them. */
 .ambience-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ambience-player {
   width: 1px;
   height: 1px;
   overflow: hidden;
-  flex-shrink: 0;
   opacity: 0.01;
   pointer-events: none;
+}
+
+.ambience-player-frame {
+  width: 100%;
+  height: 100%;
+}
+
+.ambience-player--visible {
+  width: 150px;
+  height: 105px;
+  opacity: 1;
+  pointer-events: auto;
+  border: 1px solid #35505a;
+  border-radius: 6px;
+  background: #000;
+}
+
+.ambience-player--visible .ambience-player-frame {
+  height: 84px;
+}
+
+.ambience-player-hint {
+  display: block;
+  padding: 2px 4px;
+  font-size: 10px;
+  color: #86a5b0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Its own section, visually separate from the queue above it. */

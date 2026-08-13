@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadScriptOnce } from "../lib/loadScript";
 import { hasGestured, registerGestureTarget, registerUnmuteTarget } from "../lib/audioGestures";
 import { AmbienceStream } from "../types";
@@ -74,6 +74,12 @@ function AmbiencePlayer({
     return startedHere || hasGestured();
   }
 
+  // A browser that won't grant this frame autoplay leaves the layer stuck
+  // silent, and unlike the video there's nothing to click. Reveal the embed so
+  // its own play button — the one control browsers always honour — is reachable.
+  const [needsClick, setNeedsClick] = useState(false);
+  const refusedTicks = useRef(0);
+
   function applyAudio() {
     const player = playerRef.current;
     if (!player) return;
@@ -95,13 +101,24 @@ function AmbiencePlayer({
     const playing = state === window.YT?.PlayerState.PLAYING;
     const buffering = state === window.YT?.PlayerState.BUFFERING;
     if (!wantPlaying.current) {
+      refusedTicks.current = 0;
       if (playing || buffering) player.pauseVideo();
       return;
     }
     // Never start merely because the panel opened onto a room that already had
     // layers running; wait for a click or a change during the session.
     if (!mayStart()) return;
-    if (!playing && !buffering) player.playVideo();
+
+    if (playing || buffering) {
+      refusedTicks.current = 0;
+      setNeedsClick(false);
+      return;
+    }
+
+    player.playVideo();
+    refusedTicks.current += 1;
+    // Two failed rounds means the browser isn't going to relent on its own.
+    if (refusedTicks.current >= 2) setNeedsClick(true);
   }
 
   useEffect(() => {
@@ -127,7 +144,8 @@ function AmbiencePlayer({
       const params = new URLSearchParams({
         enablejsapi: "1",
         playsinline: "1",
-        controls: "0",
+        // Controls stay on so the embed is usable when it has to be revealed.
+        controls: "1",
         // YouTube loops a single video only when it's given as a one-item list.
         loop: "1",
         playlist: stream.videoId,
@@ -202,5 +220,10 @@ function AmbiencePlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div className="ambience-player" ref={containerRef} />;
+  return (
+    <div className={needsClick ? "ambience-player ambience-player--visible" : "ambience-player"}>
+      <div className="ambience-player-frame" ref={containerRef} />
+      {needsClick && <span className="ambience-player-hint">{stream.title}</span>}
+    </div>
+  );
 }
