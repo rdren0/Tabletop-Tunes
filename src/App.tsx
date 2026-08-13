@@ -13,7 +13,7 @@ import { PlayerStage } from "./components/PlayerStage";
 import { AmbienceLayer } from "./components/AmbienceStage";
 import { notifyGesture, unmuteAll } from "./lib/audioGestures";
 import { AmbienceStream, QueueItem, SongRequest } from "./types";
-import { SPOTIFY_ENABLED } from "./config";
+import { AMBIENCE_ENABLED, SPOTIFY_ENABLED } from "./config";
 
 const SOURCE_LABEL: Record<string, string> = {
   youtube: "YouTube",
@@ -634,7 +634,18 @@ export default function App() {
 
       {/* A separate instrument from the queue: looping beds with their own
           transport, which keep running regardless of what the queue is doing. */}
-      {(canControl || activeAmbienceCount > 0) && (
+      {!AMBIENCE_ENABLED && (
+        <section className="ambience-panel">
+          <div className="ambience-bar">
+            <span className="ambience-header-label ambience-header-label--static">
+              🌧 Ambience
+              <em className="ambience-header-meta"> coming soon</em>
+            </span>
+          </div>
+        </section>
+      )}
+
+      {AMBIENCE_ENABLED && (canControl || activeAmbienceCount > 0) && (
         <section className="ambience-panel">
           <div className="ambience-bar">
             {canControl ? (
