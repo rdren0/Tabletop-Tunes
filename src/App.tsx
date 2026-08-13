@@ -457,11 +457,6 @@ export default function App() {
       </div>
       {/* Ambience runs on its own transport: each stream's own toggle decides
           whether it sounds, independent of whatever the queue is doing. */}
-      <AmbienceStage
-        streams={room.ambience}
-        listenerVolume={ambienceVolume}
-        muted={ambienceMuted}
-      />
 
       {autoMuted && muted && (
         <p className="hint hint--dj">
@@ -673,6 +668,15 @@ export default function App() {
               }}
             />
           </div>
+
+          {/* The players live here so that a layer the browser refuses shows
+              its play button among the ambience controls, not adrift at the
+              top of the panel. */}
+          <AmbienceStage
+            streams={room.ambience}
+            listenerVolume={ambienceVolume}
+            muted={ambienceMuted}
+          />
 
           {canControl && (
             <div className="ambience-body">

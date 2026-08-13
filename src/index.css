@@ -411,6 +411,11 @@ body {
   flex-shrink: 0;
 }
 
+/* Only takes up room once a peephole is actually showing. */
+.ambience-stage:has(.ambience-player--peephole) {
+  padding: 8px 10px 0;
+}
+
 .ambience-player {
   width: 1px;
   height: 1px;
