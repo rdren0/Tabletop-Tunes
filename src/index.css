@@ -64,38 +64,6 @@ body {
   font-size: 13px;
 }
 
-/* The background page is never seen; its players just need to exist. */
-.background-stage {
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0.01;
-}
-
-.now-playing {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #26262e;
-  border: 1px solid #3a3a45;
-  font-size: 13px;
-}
-
-.now-playing-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.now-playing-state {
-  color: #999;
-  flex-shrink: 0;
-}
-
 .transport {
   display: flex;
   align-items: center;
