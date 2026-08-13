@@ -220,10 +220,16 @@ function AmbiencePlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // When revealed, the embed is cropped down to its centre, where YouTube's
+  // play button always sits — so this reads as a small play button while the
+  // click lands on the real iframe. Forwarding a click is impossible: a
+  // synthesised event carries no user activation into a cross-origin frame.
   return (
-    <div className={needsClick ? "ambience-player ambience-player--visible" : "ambience-player"}>
+    <div
+      className={needsClick ? "ambience-player ambience-player--peephole" : "ambience-player"}
+      title={needsClick ? `Play ${stream.title}` : undefined}
+    >
       <div className="ambience-player-frame" ref={containerRef} />
-      {needsClick && <span className="ambience-player-hint">{stream.title}</span>}
     </div>
   );
 }

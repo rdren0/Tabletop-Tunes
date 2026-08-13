@@ -424,28 +424,32 @@ body {
   height: 100%;
 }
 
-.ambience-player--visible {
-  width: 150px;
-  height: 105px;
+/* A window onto the centre of the embed, where YouTube's play button always
+   sits. Looks like a small play button; the click is a real one on the iframe,
+   which is the only kind a browser accepts. */
+.ambience-player--peephole {
+  position: relative;
+  width: 74px;
+  height: 54px;
   opacity: 1;
   pointer-events: auto;
+  overflow: hidden;
   border: 1px solid #35505a;
   border-radius: 6px;
   background: #000;
 }
 
-.ambience-player--visible .ambience-player-frame {
-  height: 84px;
+.ambience-player--peephole .ambience-player-frame {
+  position: static;
 }
 
-.ambience-player-hint {
-  display: block;
-  padding: 2px 4px;
-  font-size: 10px;
-  color: #86a5b0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ambience-player--peephole iframe {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  height: 180px;
 }
 
 /* Its own section, visually separate from the queue above it. */
