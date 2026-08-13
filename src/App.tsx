@@ -50,6 +50,9 @@ export default function App() {
   // Its own mute, independent of the music's — ambience is a separate layer,
   // so silencing one shouldn't silence the other.
   const [ambienceMuted, setAmbienceMuted] = useState(false);
+  // The video is incidental — this is a music player — so it stays out of the
+  // way until someone asks for it.
+  const [showVideo, setShowVideo] = useState(false);
   const [ambienceInput, setAmbienceInput] = useState("");
   const [ambienceError, setAmbienceError] = useState<string | null>(null);
   const [playlistIds, setPlaylistIds] = useState<string[]>([]);
@@ -354,28 +357,38 @@ export default function App() {
 
   return (
     <div className="app">
-      <PlayerStage
-        item={currentItem}
-        isPlaying={room.isPlaying}
-        volume={volume}
-        muted={muted}
-        anchorPosition={room.anchorPosition}
-        anchorAt={room.anchorAt}
-        onTime={(seconds) => {
-          positionRef.current = seconds;
-        }}
-        onAutoMuted={() => {
-          setMuted(true);
-          setAutoMuted(true);
-        }}
-        canControl={canControl}
-        onLocalTransport={(playing) => {
-          if (!canControl) return;
-          patchRoom({ isPlaying: playing, ...anchorHere() });
-        }}
-        onPlaylistLoaded={setPlaylistIds}
-        onEnded={handleEnded}
-      />
+      <button className="video-toggle" onClick={() => setShowVideo((v) => !v)}>
+        <span>{showVideo ? "▾" : "▸"} Video</span>
+        <span className="video-toggle-meta">{showVideo ? "hide" : "show"}</span>
+      </button>
+
+      {/* Collapsed by default, but never unmounted — removing the iframe would
+          stop the audio, and a zero-size one can be treated as hidden and
+          refused, so it parks at a sliver instead. */}
+      <div className={showVideo ? "video-wrap" : "video-wrap video-wrap--collapsed"}>
+        <PlayerStage
+          item={currentItem}
+          isPlaying={room.isPlaying}
+          volume={volume}
+          muted={muted}
+          anchorPosition={room.anchorPosition}
+          anchorAt={room.anchorAt}
+          onTime={(seconds) => {
+            positionRef.current = seconds;
+          }}
+          onAutoMuted={() => {
+            setMuted(true);
+            setAutoMuted(true);
+          }}
+          canControl={canControl}
+          onLocalTransport={(playing) => {
+            if (!canControl) return;
+            patchRoom({ isPlaying: playing, ...anchorHere() });
+          }}
+          onPlaylistLoaded={setPlaylistIds}
+          onEnded={handleEnded}
+        />
+      </div>
 
       <div className="transport">
         <button onClick={() => skip(-1)} disabled={!canControl || room.queue.length === 0} title="Previous">

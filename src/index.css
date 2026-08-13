@@ -30,6 +30,37 @@ body {
   color: #999;
 }
 
+.video-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #3a3a45;
+  border-radius: 6px;
+  background: #26262e;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.video-toggle-meta {
+  color: #888;
+}
+
+.video-wrap {
+  flex-shrink: 0;
+}
+
+/* Collapsed, not removed: the player has to keep running to keep playing. */
+.video-wrap--collapsed {
+  height: 1px;
+  overflow: hidden;
+  opacity: 0.01;
+  pointer-events: none;
+}
+
 .player-stage {
   width: 100%;
   min-height: 152px;
