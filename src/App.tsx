@@ -44,8 +44,6 @@ export default function App() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [requestSent, setRequestSent] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
-  // Open by default: a GM or DJ managing layers wants them in view.
-  const [showAmbience, setShowAmbience] = useState(true);
   // Per-listener, exactly like the music volume, and deliberately quiet to
   // start — ambience is meant to sit under things.
   const [ambienceVolume, setAmbienceVolume] = useState(30);
@@ -624,13 +622,14 @@ export default function App() {
         <section className="ambience-panel">
           <div className="ambience-bar">
             {canControl ? (
-              <button className="ambience-header" onClick={() => setShowAmbience((v) => !v)}>
-                <span className="ambience-header-label">🌧 Ambience</span>
-                <span className="ambience-header-meta">
-                  {activeAmbienceCount > 0 ? `${activeAmbienceCount} playing` : "off"}
-                </span>
-                <span className="ambience-header-caret">{showAmbience ? "▾" : "▸"}</span>
-              </button>
+              // Always open for whoever runs it — the layers are the control
+              // surface, not something to be tucked away.
+              <span className="ambience-header-label ambience-header-label--static">
+                🌧 Ambience
+                <em className="ambience-header-meta">
+                  {activeAmbienceCount > 0 ? ` ${activeAmbienceCount} playing` : " off"}
+                </em>
+              </span>
             ) : (
               // Listeners get the level and nothing else — no list, no
               // transport — and it's visible without opening anything.
@@ -660,7 +659,7 @@ export default function App() {
             />
           </div>
 
-          {canControl && showAmbience && (
+          {canControl && (
             <div className="ambience-body">
               <p className="ambience-blurb">
                 Looping sounds that play independently of the queue. Everyone sets their own
