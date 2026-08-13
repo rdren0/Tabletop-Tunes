@@ -18,3 +18,21 @@ export function registerUnmuteTarget(target: UnmuteTarget): () => void {
 export function unmuteAll(): void {
   targets.forEach((target) => target());
 }
+
+/**
+ * Anything with no clickable surface of its own — the ambience layers are
+ * 1px and invisible — can never receive a gesture directly. Registering here
+ * lets any click in the popover stand in for one.
+ */
+const gestureTargets = new Set<UnmuteTarget>();
+
+export function registerGestureTarget(target: UnmuteTarget): () => void {
+  gestureTargets.add(target);
+  return () => {
+    gestureTargets.delete(target);
+  };
+}
+
+export function notifyGesture(): void {
+  gestureTargets.forEach((target) => target());
+}

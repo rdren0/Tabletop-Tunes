@@ -11,7 +11,7 @@ import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
 import { PlayerStage } from "./components/PlayerStage";
 import { AmbienceStage } from "./components/AmbienceStage";
-import { unmuteAll } from "./lib/audioGestures";
+import { notifyGesture, unmuteAll } from "./lib/audioGestures";
 import { AmbienceStream, QueueItem, SongRequest } from "./types";
 import { SPOTIFY_ENABLED } from "./config";
 
@@ -58,6 +58,14 @@ export default function App() {
     setMuted(false);
     setAutoMuted(false);
   }
+
+  // Ambience players are invisible, so they can never be clicked directly.
+  // Treat any click in the popover as the gesture they need.
+  useEffect(() => {
+    const handler = () => notifyGesture();
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
 
   // Clearing wipes the queue for everyone, so it takes two clicks. Forget the
   // pending confirmation if the second click doesn't come promptly.
@@ -431,7 +439,12 @@ export default function App() {
           </button>
         )}
       </div>
-      <AmbienceStage streams={room.ambience} masterVolume={volume} muted={muted} />
+      <AmbienceStage
+        streams={room.ambience}
+        masterVolume={volume}
+        muted={muted}
+        roomPlaying={room.isPlaying}
+      />
 
       {autoMuted && muted && (
         <p className="hint hint--dj">
