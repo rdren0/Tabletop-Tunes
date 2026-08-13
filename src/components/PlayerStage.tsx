@@ -142,6 +142,9 @@ function YouTubeStage({
   // When we last asked the player to play, so a pause that lands right after
   // reads as the browser refusing rather than the listener choosing.
   const lastPlayRequest = useRef(0);
+  // Loading a video can emit a PLAYING state on its own; that isn't someone
+  // pressing play, so it must not be mirrored into room state.
+  const lastLoadAt = useRef(0);
   const canControlRef = useRef(canControl);
   canControlRef.current = canControl;
   const onLocalTransportRef = useRef(onLocalTransport);
@@ -345,7 +348,8 @@ function YouTubeStage({
               // A GM or DJ pressing YouTube's own play button is a real user
               // gesture — the one thing the API can't fake — so let it drive
               // the room rather than being overwritten a moment later.
-              if (canControlRef.current && !isPlayingRef.current) {
+              const fromLoad = Date.now() - lastLoadAt.current < 2000;
+              if (canControlRef.current && !isPlayingRef.current && !fromLoad) {
                 onLocalTransportRef.current?.(true);
               }
               return;
@@ -385,15 +389,20 @@ function YouTubeStage({
     const player = playerRef.current;
     if (!player) return;
     const { link } = itemRef.current;
+    // load*() begins playing immediately. When the room is paused — a listener
+    // opening the panel before the GM has started anything — cue instead, so
+    // nothing blares for a moment before the reconcile pauses it again.
+    const shouldPlay = isPlayingRef.current;
+    lastLoadAt.current = Date.now();
     if (link.kind === "playlist") {
-      player.loadPlaylist({ list: link.mediaId });
+      if (shouldPlay) player.loadPlaylist({ list: link.mediaId });
+      else player.cuePlaylist?.({ list: link.mediaId });
     } else {
-      player.loadVideoById(link.mediaId);
+      if (shouldPlay) player.loadVideoById(link.mediaId);
+      else player.cueVideoById?.(link.mediaId);
     }
     lastKeyRef.current = mediaKeyOf(itemRef.current);
-    // load*() normally starts playback on its own, but a player that was
-    // paused can come back cued instead — so ask explicitly.
-    if (isPlayingRef.current) requestPlay();
+    if (shouldPlay) requestPlay();
   }
 
   // React to the queue item changing.

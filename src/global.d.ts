@@ -38,6 +38,9 @@ declare global {
     pauseVideo(): void;
     loadVideoById(id: string): void;
     loadPlaylist(options: { list: string }): void;
+    // The cue* variants load without starting playback.
+    cueVideoById?(id: string): void;
+    cuePlaylist?(options: { list: string }): void;
     getIframe?(): HTMLIFrameElement | null;
     getPlayerState?(): number;
     getCurrentTime?(): number;
