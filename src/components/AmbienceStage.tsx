@@ -5,8 +5,12 @@ import { AmbienceStream } from "../types";
 
 interface AmbienceStageProps {
   streams: AmbienceStream[];
-  /** This listener's master level, applied on top of each stream's mix level. */
-  masterVolume: number;
+  /**
+   * This listener's own ambience level, applied on top of each stream's shared
+   * mix level. Separate from the music volume so a listener can keep the beds
+   * quiet under a track without touching either one's balance.
+   */
+  listenerVolume: number;
   muted: boolean;
 }
 
@@ -16,7 +20,7 @@ interface AmbienceStageProps {
  * their iframes are parked in a 1px box rather than hidden with `display:none`,
  * which some browsers treat as a reason to refuse playback entirely.
  */
-export function AmbienceStage({ streams, masterVolume, muted }: AmbienceStageProps) {
+export function AmbienceStage({ streams, listenerVolume, muted }: AmbienceStageProps) {
   const active = streams.filter((stream) => stream.playing);
   return (
     <div className="ambience-stage" aria-hidden>
@@ -24,7 +28,7 @@ export function AmbienceStage({ streams, masterVolume, muted }: AmbienceStagePro
         <AmbiencePlayer
           key={stream.id}
           stream={stream}
-          masterVolume={masterVolume}
+          listenerVolume={listenerVolume}
           muted={muted}
         />
       ))}
@@ -34,19 +38,19 @@ export function AmbienceStage({ streams, masterVolume, muted }: AmbienceStagePro
 
 function AmbiencePlayer({
   stream,
-  masterVolume,
+  listenerVolume,
   muted,
 }: {
   stream: AmbienceStream;
-  masterVolume: number;
+  listenerVolume: number;
   muted: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
 
-  // A stream's own level is relative to the mix; the listener's master volume
-  // scales the whole thing.
-  const effectiveVolume = Math.round((stream.volume / 100) * masterVolume);
+  // A stream's own level is its place in the shared mix; the listener's
+  // ambience volume scales the whole layer for them alone.
+  const effectiveVolume = Math.round((stream.volume / 100) * listenerVolume);
   const volumeRef = useRef(effectiveVolume);
   volumeRef.current = effectiveVolume;
   const mutedRef = useRef(muted);

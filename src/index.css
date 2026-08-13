@@ -421,20 +421,45 @@ body {
   overflow: hidden;
 }
 
+.ambience-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+  background: #22343a;
+}
+
 .ambience-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 8px 10px;
   border: 0;
-  background: #22343a;
+  background: none;
   color: #cfe6ee;
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.ambience-header-label--static {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  color: #cfe6ee;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ambience-listener-volume {
+  width: 90px;
+  flex-shrink: 0;
 }
 
 .ambience-header-label {

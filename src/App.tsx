@@ -44,7 +44,11 @@ export default function App() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [requestSent, setRequestSent] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
-  const [showAmbience, setShowAmbience] = useState(false);
+  // Open by default: a GM or DJ managing layers wants them in view.
+  const [showAmbience, setShowAmbience] = useState(true);
+  // Per-listener, exactly like the music volume, and deliberately quiet to
+  // start — ambience is meant to sit under things.
+  const [ambienceVolume, setAmbienceVolume] = useState(30);
   const [ambienceInput, setAmbienceInput] = useState("");
   const [ambienceError, setAmbienceError] = useState<string | null>(null);
   const [playlistIds, setPlaylistIds] = useState<string[]>([]);
@@ -317,7 +321,9 @@ export default function App() {
       url: ambienceInput.trim(),
       title,
       videoId: link.mediaId,
-      volume: 50,
+      // Each listener scales ambience themselves, so a stream carries no
+      // shared level of its own.
+      volume: 100,
       playing: false,
     };
     patchRoom({ ambience: [...room.ambience, stream] });
@@ -435,7 +441,7 @@ export default function App() {
       </div>
       {/* Ambience runs on its own transport: each stream's own toggle decides
           whether it sounds, independent of whatever the queue is doing. */}
-      <AmbienceStage streams={room.ambience} masterVolume={volume} muted={muted} />
+      <AmbienceStage streams={room.ambience} listenerVolume={ambienceVolume} muted={muted} />
 
       {autoMuted && muted && (
         <p className="hint hint--dj">
@@ -607,56 +613,64 @@ export default function App() {
 
       {/* A separate instrument from the queue: looping beds with their own
           transport, which keep running regardless of what the queue is doing. */}
-      <section className="ambience-panel">
-        <button className="ambience-header" onClick={() => setShowAmbience((v) => !v)}>
-          <span className="ambience-header-label">🌧 Ambience</span>
-          <span className="ambience-header-meta">
-            {activeAmbienceCount > 0 ? `${activeAmbienceCount} playing` : "off"}
-          </span>
-          <span className="ambience-header-caret">{showAmbience ? "▾" : "▸"}</span>
-        </button>
+      {(canControl || activeAmbienceCount > 0) && (
+        <section className="ambience-panel">
+          <div className="ambience-bar">
+            {canControl ? (
+              <button className="ambience-header" onClick={() => setShowAmbience((v) => !v)}>
+                <span className="ambience-header-label">🌧 Ambience</span>
+                <span className="ambience-header-meta">
+                  {activeAmbienceCount > 0 ? `${activeAmbienceCount} playing` : "off"}
+                </span>
+                <span className="ambience-header-caret">{showAmbience ? "▾" : "▸"}</span>
+              </button>
+            ) : (
+              // Listeners get the level and nothing else — no list, no
+              // transport — and it's visible without opening anything.
+              <span className="ambience-header-label ambience-header-label--static">
+                🌧 Ambience
+              </span>
+            )}
+            <input
+              className="ambience-listener-volume"
+              type="range"
+              min={0}
+              max={100}
+              value={ambienceVolume}
+              title="Ambience volume — yours only"
+              onChange={(e) => setAmbienceVolume(Number(e.target.value))}
+            />
+          </div>
 
-        {showAmbience && (
-          <div className="ambience-body">
-            <p className="ambience-blurb">
-              Looping sounds that play independently of the queue — rain, a tavern, drums.
-            </p>
-            <ul className="dj-list">
-              {room.ambience.map((stream) => (
-                <li key={stream.id} className="ambience-item">
-                  <button
-                    className={stream.playing ? "amb-toggle amb-toggle--on" : "amb-toggle"}
-                    onClick={() => updateAmbience(stream.id, { playing: !stream.playing })}
-                    disabled={!canControl}
-                    title={stream.playing ? "Stop" : "Play"}
-                  >
-                    {stream.playing ? "◼" : "▶"}
-                  </button>
-                  <span className="ambience-title" title={stream.url}>
-                    {stream.title}
-                  </span>
-                  <input
-                    className="ambience-volume"
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={stream.volume}
-                    disabled={!canControl}
-                    title="Level in the mix (shared)"
-                    onChange={(e) => updateAmbience(stream.id, { volume: Number(e.target.value) })}
-                  />
-                  <button
-                    className="remove"
-                    onClick={() => removeAmbience(stream.id)}
-                    disabled={!canControl}
-                    title="Remove"
-                  >
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {canControl && (
+          {canControl && showAmbience && (
+            <div className="ambience-body">
+              <p className="ambience-blurb">
+                Looping sounds that play independently of the queue. Everyone sets their own
+                ambience volume.
+              </p>
+              <ul className="dj-list">
+                {room.ambience.map((stream) => (
+                  <li key={stream.id} className="ambience-item">
+                    <button
+                      className={stream.playing ? "amb-toggle amb-toggle--on" : "amb-toggle"}
+                      onClick={() => updateAmbience(stream.id, { playing: !stream.playing })}
+                      title={stream.playing ? "Stop" : "Play"}
+                    >
+                      {stream.playing ? "◼" : "▶"}
+                    </button>
+                    <span className="ambience-title" title={stream.url}>
+                      {stream.title}
+                    </span>
+                    <button
+                      className="remove"
+                      onClick={() => removeAmbience(stream.id)}
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
               <div className="add-row add-row--ambience">
                 <input
                   type="text"
@@ -669,11 +683,11 @@ export default function App() {
                   Add
                 </button>
               </div>
-            )}
-            {ambienceError && <p className="error">{ambienceError}</p>}
-          </div>
-        )}
-      </section>
+              {ambienceError && <p className="error">{ambienceError}</p>}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
