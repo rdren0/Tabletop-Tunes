@@ -510,7 +510,9 @@ export default function App() {
                   ⠿
                 </span>
               )}
-              <span className="badge">{SOURCE_LABEL[item.link.source]}</span>
+              <span className={`badge badge--${item.link.source}`}>
+                {SOURCE_LABEL[item.link.source]}
+              </span>
               <button className="queue-title" onClick={() => playAt(index)} disabled={!canControl} title={item.url}>
                 {item.title}
               </button>

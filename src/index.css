@@ -299,11 +299,23 @@ body {
 
 .badge {
   font-size: 10px;
+  font-weight: 600;
   padding: 2px 5px;
   border-radius: 4px;
   background: #444;
   color: #ccc;
   flex-shrink: 0;
+}
+
+/* Each service's own brand colour, with white text for contrast. */
+.badge--youtube {
+  background: #ff0000;
+  color: #fff;
+}
+
+.badge--spotify {
+  background: #1db954;
+  color: #08120b;
 }
 
 .queue-title {
