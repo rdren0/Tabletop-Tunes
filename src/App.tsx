@@ -35,7 +35,9 @@ export default function App() {
   // True when the browser refused audio and playback started muted, so the
   // speaker button can be explained rather than just looking wrong.
   const [autoMuted, setAutoMuted] = useState(false);
-  const [showDjPanel, setShowDjPanel] = useState(false);
+  // Open by default so a GM sees who holds DJ access without hunting for it,
+  // but still collapsible once they've had a look.
+  const [showDjPanel, setShowDjPanel] = useState(true);
   const [confirmClear, setConfirmClear] = useState(false);
   const [spotifyNotice, setSpotifyNotice] = useState(false);
   // Warn once per popover session, so it lands the first time it matters
