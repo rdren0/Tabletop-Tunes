@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadScriptOnce } from "../lib/loadScript";
 import { hasGestured, registerGestureTarget, registerUnmuteTarget } from "../lib/audioGestures";
+import { autoplayAllowed } from "../lib/autoplayProbe";
 import { AmbienceStream } from "../types";
 
 interface AmbienceLayerProps {
@@ -38,6 +39,14 @@ export function AmbienceLayer({
   const [needsClick, setNeedsClick] = useState(false);
   const [starting, setStarting] = useState(false);
   const refusedTicks = useRef(0);
+  // null until the probe answers; true means this browser won't start audio
+  // on its own, so offer the fallback at once rather than retrying in silence.
+  const autoplayBlocked = useRef<boolean | null>(null);
+  useEffect(() => {
+    autoplayAllowed().then((ok) => {
+      autoplayBlocked.current = !ok;
+    });
+  }, []);
 
   const effectiveVolume = Math.round((stream.volume / 100) * listenerVolume);
   const volumeRef = useRef(effectiveVolume);
@@ -90,12 +99,15 @@ export function AmbienceLayer({
     }
 
     player.playVideo();
-    setStarting(true);
     refusedTicks.current += 1;
-    // Two failed rounds means the browser isn't going to relent on its own.
-    if (refusedTicks.current >= 2) {
+    // A browser that already told us it won't autoplay isn't going to change
+    // its mind, so don't make anyone watch a spinner for it.
+    const hopeless = autoplayBlocked.current === true && !hasGestured();
+    if (hopeless || refusedTicks.current >= 2) {
       setNeedsClick(true);
       setStarting(false);
+    } else {
+      setStarting(true);
     }
   }
 
