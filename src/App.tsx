@@ -429,7 +429,9 @@ export default function App() {
       <AmbienceStage streams={room.ambience} masterVolume={volume} muted={muted} />
 
       {autoMuted && muted && (
-        <p className="hint hint--dj">Your browser blocked audio — tap 🔇 to hear it.</p>
+        <p className="hint hint--dj">
+          Your browser blocked audio. Tap 🔇, or tap the video itself if that doesn't take.
+        </p>
       )}
       {!canControl && <p className="hint">Listening only.</p>}
       {!isGM && isDJ && <p className="hint hint--dj">You have DJ access.</p>}

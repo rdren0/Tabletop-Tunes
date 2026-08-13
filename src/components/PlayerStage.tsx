@@ -136,7 +136,19 @@ function YouTubeStage({
         stalledTicks.current = 0;
         player.unMute?.();
         player.setVolume?.(volumeRef.current);
-        if (isPlayingRef.current) player.playVideo();
+        if (!isPlayingRef.current) return;
+        player.playVideo();
+        // Unmuting can make the browser pause a moment later, since the API
+        // call reaches YouTube's frame without the user activation the tap
+        // carried. Nudge it a few times; on desktop that usually recovers.
+        [300, 900, 1800].forEach((delay) =>
+          window.setTimeout(() => {
+            if (!isPlayingRef.current) return;
+            const p = playerRef.current;
+            if (!p) return;
+            if (p.getPlayerState?.() !== window.YT?.PlayerState.PLAYING) p.playVideo();
+          }, delay)
+        );
       }),
     []
   );
