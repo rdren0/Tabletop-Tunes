@@ -8,8 +8,6 @@ interface AmbienceStageProps {
   /** This listener's master level, applied on top of each stream's mix level. */
   masterVolume: number;
   muted: boolean;
-  /** Ambience follows the room's transport: pausing the track pauses the beds. */
-  roomPlaying: boolean;
 }
 
 /**
@@ -18,7 +16,7 @@ interface AmbienceStageProps {
  * their iframes are parked in a 1px box rather than hidden with `display:none`,
  * which some browsers treat as a reason to refuse playback entirely.
  */
-export function AmbienceStage({ streams, masterVolume, muted, roomPlaying }: AmbienceStageProps) {
+export function AmbienceStage({ streams, masterVolume, muted }: AmbienceStageProps) {
   const active = streams.filter((stream) => stream.playing);
   return (
     <div className="ambience-stage" aria-hidden>
@@ -28,7 +26,6 @@ export function AmbienceStage({ streams, masterVolume, muted, roomPlaying }: Amb
           stream={stream}
           masterVolume={masterVolume}
           muted={muted}
-          roomPlaying={roomPlaying}
         />
       ))}
     </div>
@@ -39,12 +36,10 @@ function AmbiencePlayer({
   stream,
   masterVolume,
   muted,
-  roomPlaying,
 }: {
   stream: AmbienceStream;
   masterVolume: number;
   muted: boolean;
-  roomPlaying: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -56,8 +51,8 @@ function AmbiencePlayer({
   volumeRef.current = effectiveVolume;
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
-  const wantPlaying = useRef(roomPlaying);
-  wantPlaying.current = roomPlaying;
+  // Only mounted while the stream is switched on, so it always wants to sound.
+  const wantPlaying = useRef(true);
 
   function applyAudio() {
     const player = playerRef.current;
@@ -141,7 +136,7 @@ function AmbiencePlayer({
   useEffect(() => {
     reconcile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveVolume, muted, roomPlaying]);
+  }, [effectiveVolume, muted]);
 
   // Join the room-wide unmute gesture, so one click restores every layer.
   useEffect(
