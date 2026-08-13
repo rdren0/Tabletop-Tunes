@@ -190,6 +190,15 @@ function YouTubeStage({
   function syncToAnchor() {
     const player = playerRef.current;
     if (!player || !readyRef.current) return;
+    // A listener who stopped their own audio isn't drifting, they're parked.
+    // Chasing the room's anchor would seek them every couple of seconds.
+    if (userPaused.current) return;
+    // Only a player that is actually running can drift. Seeking a paused or
+    // cued one just reloads the frame, which reads as the picture flickering.
+    const state = player.getPlayerState?.();
+    if (state !== window.YT?.PlayerState.PLAYING && state !== window.YT?.PlayerState.BUFFERING) {
+      return;
+    }
     const target = expectedPosition();
     if (target === null) return;
     // A duration of 0 means the video hasn't loaded yet; seeking now would
