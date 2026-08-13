@@ -64,6 +64,19 @@ export default function App() {
     setAutoMuted(false);
   }
 
+  // Ambience switched on last session shouldn't come back by itself — the GM
+  // starts a session with everything silent and turns layers on deliberately.
+  const ambienceReset = useRef(false);
+  useEffect(() => {
+    if (!ready || !isGM || ambienceReset.current) return;
+    if (room.ambience.length === 0) return;
+    ambienceReset.current = true;
+    if (room.ambience.some((s) => s.playing)) {
+      patchRoom({ ambience: room.ambience.map((s) => ({ ...s, playing: false })) });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, isGM, room.ambience.length]);
+
   // Ambience players are invisible, so they can never be clicked directly.
   // Treat any click in the popover as the gesture they need.
   useEffect(() => {
