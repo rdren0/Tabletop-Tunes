@@ -127,6 +127,9 @@ export function AmbienceLayer({
       // Built by hand because `allow` is only honoured at load time — setting
       // it afterwards never delegates autoplay permission at all.
       const frame = document.createElement("iframe");
+      // These layers are heard, not watched — override YouTube's default
+      // "YouTube video player" label, which is what surfaces on hover.
+      frame.title = `Play audio — ${stream.title}`;
       frame.allow = "autoplay; encrypted-media";
       frame.width = "100%";
       frame.height = "100%";
@@ -218,7 +221,7 @@ export function AmbienceLayer({
       {/* Always mounted while playing; only visible when it has to be clicked. */}
       <span
         className={needsClick ? "ambience-player ambience-player--peephole" : "ambience-player"}
-        title={needsClick ? `Start ${stream.title}` : undefined}
+        title={needsClick ? `Play audio — ${stream.title}` : undefined}
       >
         <span className="ambience-player-frame" ref={containerRef} />
       </span>
