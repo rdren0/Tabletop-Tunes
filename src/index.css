@@ -417,11 +417,13 @@ body {
 }
 
 .ambience-player {
+  display: inline-block;
   width: 1px;
   height: 1px;
   overflow: hidden;
   opacity: 0.01;
   pointer-events: none;
+  vertical-align: middle;
 }
 
 .ambience-player-frame {
@@ -432,10 +434,34 @@ body {
 /* A window onto the centre of the embed, where YouTube's play button always
    sits. Looks like a small play button; the click is a real one on the iframe,
    which is the only kind a browser accepts. */
+.amb-slot {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.amb-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #4a4a58;
+  border-top-color: #b7a4ff;
+  border-radius: 50%;
+  animation: amb-spin 0.7s linear infinite;
+}
+
+@keyframes amb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Sized to sit in the row like the transport button it replaces. */
 .ambience-player--peephole {
+  display: inline-block;
   position: relative;
-  width: 74px;
-  height: 54px;
+  width: 40px;
+  height: 30px;
   opacity: 1;
   pointer-events: auto;
   overflow: hidden;
@@ -448,11 +474,12 @@ body {
   position: static;
 }
 
+/* Scaled down so YouTube's centre play button fits the little window. */
 .ambience-player--peephole iframe {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(0.5);
   width: 320px;
   height: 180px;
 }

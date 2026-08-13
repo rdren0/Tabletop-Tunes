@@ -10,7 +10,7 @@ import {
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
 import { PlayerStage } from "./components/PlayerStage";
-import { AmbienceStage } from "./components/AmbienceStage";
+import { AmbienceLayer } from "./components/AmbienceStage";
 import { notifyGesture, unmuteAll } from "./lib/audioGestures";
 import { AmbienceStream, QueueItem, SongRequest } from "./types";
 import { SPOTIFY_ENABLED } from "./config";
@@ -50,6 +50,12 @@ export default function App() {
   // Its own mute, independent of the music's — ambience is a separate layer,
   // so silencing one shouldn't silence the other.
   const [ambienceMuted, setAmbienceMuted] = useState(false);
+  // Layers already running when this panel opened are "found", not "started",
+  // so they wait for a click rather than sounding unprompted.
+  const foundRunning = useRef<Set<string> | null>(null);
+  if (foundRunning.current === null) {
+    foundRunning.current = new Set(room.ambience.filter((s) => s.playing).map((s) => s.id));
+  }
   const [ambienceInput, setAmbienceInput] = useState("");
   const [ambienceError, setAmbienceError] = useState<string | null>(null);
   const [playlistIds, setPlaylistIds] = useState<string[]>([]);
@@ -669,14 +675,22 @@ export default function App() {
             />
           </div>
 
-          {/* The players live here so that a layer the browser refuses shows
-              its play button among the ambience controls, not adrift at the
-              top of the panel. */}
-          <AmbienceStage
-            streams={room.ambience}
-            listenerVolume={ambienceVolume}
-            muted={ambienceMuted}
-          />
+          {/* Listeners have no rows, so their players mount here instead. */}
+          {!canControl && (
+            <div className="ambience-stage">
+              {room.ambience.map((stream) => (
+                <AmbienceLayer
+                  key={stream.id}
+                  stream={stream}
+                  listenerVolume={ambienceVolume}
+                  muted={ambienceMuted}
+                  startedHere={!foundRunning.current?.has(stream.id)}
+                  canControl={false}
+                  onToggle={() => {}}
+                />
+              ))}
+            </div>
+          )}
 
           {canControl && (
             <div className="ambience-body">
@@ -687,13 +701,14 @@ export default function App() {
               <ul className="dj-list">
                 {room.ambience.map((stream) => (
                   <li key={stream.id} className="ambience-item">
-                    <button
-                      className={stream.playing ? "amb-toggle amb-toggle--on" : "amb-toggle"}
-                      onClick={() => updateAmbience(stream.id, { playing: !stream.playing })}
-                      title={stream.playing ? "Stop" : "Play"}
-                    >
-                      {stream.playing ? "◼" : "▶"}
-                    </button>
+                    <AmbienceLayer
+                      stream={stream}
+                      listenerVolume={ambienceVolume}
+                      muted={ambienceMuted}
+                      startedHere={!foundRunning.current?.has(stream.id)}
+                      canControl
+                      onToggle={() => updateAmbience(stream.id, { playing: !stream.playing })}
+                    />
                     <span className="ambience-title" title={stream.url}>
                       {stream.title}
                     </span>

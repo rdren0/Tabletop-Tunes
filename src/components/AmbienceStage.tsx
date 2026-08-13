@@ -3,8 +3,8 @@ import { loadScriptOnce } from "../lib/loadScript";
 import { hasGestured, registerGestureTarget, registerUnmuteTarget } from "../lib/audioGestures";
 import { AmbienceStream } from "../types";
 
-interface AmbienceStageProps {
-  streams: AmbienceStream[];
+interface AmbienceLayerProps {
+  stream: AmbienceStream;
   /**
    * This listener's own ambience level, applied on top of each stream's shared
    * mix level. Separate from the music volume so a listener can keep the beds
@@ -12,73 +12,45 @@ interface AmbienceStageProps {
    */
   listenerVolume: number;
   muted: boolean;
+  /** False for a layer that was already running when this panel opened. */
+  startedHere: boolean;
+  canControl: boolean;
+  onToggle: () => void;
 }
 
 /**
- * Runs a looping player per active ambience stream, so several sounds layer
- * under whatever the queue is playing. The players are audio-only in practice:
- * their iframes are parked in a 1px box rather than hidden with `display:none`,
- * which some browsers treat as a reason to refuse playback entirely.
+ * One ambience layer: its transport control and the player behind it, in the
+ * same slot. The player is normally a 1px sliver, but when a browser refuses
+ * to start it the embed is cropped down to its own play button and shown in
+ * place of the toggle — a real click on the iframe being the only thing a
+ * browser accepts as permission to start audio.
  */
-export function AmbienceStage({ streams, listenerVolume, muted }: AmbienceStageProps) {
-  const active = streams.filter((stream) => stream.playing);
-  // Layers already running when this panel opened are "found", not "started",
-  // so they wait for a click. Ones switched on later began while the listener
-  // was watching, and may sound straight away.
-  const foundRunning = useRef<Set<string> | null>(null);
-  if (foundRunning.current === null) {
-    foundRunning.current = new Set(active.map((stream) => stream.id));
-  }
-
-  return (
-    <div className="ambience-stage" aria-hidden>
-      {active.map((stream) => (
-        <AmbiencePlayer
-          key={stream.id}
-          stream={stream}
-          listenerVolume={listenerVolume}
-          muted={muted}
-          startedHere={!foundRunning.current?.has(stream.id)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function AmbiencePlayer({
+export function AmbienceLayer({
   stream,
   listenerVolume,
   muted,
   startedHere,
-}: {
-  stream: AmbienceStream;
-  listenerVolume: number;
-  muted: boolean;
-  startedHere: boolean;
-}) {
+  canControl,
+  onToggle,
+}: AmbienceLayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
+  const [needsClick, setNeedsClick] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const refusedTicks = useRef(0);
 
-  // A stream's own level is its place in the shared mix; the listener's
-  // ambience volume scales the whole layer for them alone.
   const effectiveVolume = Math.round((stream.volume / 100) * listenerVolume);
   const volumeRef = useRef(effectiveVolume);
   volumeRef.current = effectiveVolume;
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
-  // Only mounted while the stream is switched on, so it always wants to sound.
-  const wantPlaying = useRef(true);
+  const wantPlaying = useRef(stream.playing);
+  wantPlaying.current = stream.playing;
 
   /** Sound only from a deliberate act — a click here, or a layer started here. */
   function mayStart(): boolean {
     return startedHere || hasGestured();
   }
-
-  // A browser that won't grant this frame autoplay leaves the layer stuck
-  // silent, and unlike the video there's nothing to click. Reveal the embed so
-  // its own play button — the one control browsers always honour — is reachable.
-  const [needsClick, setNeedsClick] = useState(false);
-  const refusedTicks = useRef(0);
 
   function applyAudio() {
     const player = playerRef.current;
@@ -88,7 +60,7 @@ function AmbiencePlayer({
       if (mutedRef.current) player.mute?.();
       else player.unMute?.();
     } catch {
-      // The player exists but isn't accepting calls yet; the heartbeat retries.
+      // Not accepting calls yet; the heartbeat retries.
     }
   }
 
@@ -100,28 +72,36 @@ function AmbiencePlayer({
     const state = player.getPlayerState?.();
     const playing = state === window.YT?.PlayerState.PLAYING;
     const buffering = state === window.YT?.PlayerState.BUFFERING;
+
     if (!wantPlaying.current) {
       refusedTicks.current = 0;
+      setNeedsClick(false);
+      setStarting(false);
       if (playing || buffering) player.pauseVideo();
       return;
     }
-    // Never start merely because the panel opened onto a room that already had
-    // layers running; wait for a click or a change during the session.
     if (!mayStart()) return;
 
     if (playing || buffering) {
       refusedTicks.current = 0;
       setNeedsClick(false);
+      setStarting(false);
       return;
     }
 
     player.playVideo();
+    setStarting(true);
     refusedTicks.current += 1;
     // Two failed rounds means the browser isn't going to relent on its own.
-    if (refusedTicks.current >= 2) setNeedsClick(true);
+    if (refusedTicks.current >= 2) {
+      setNeedsClick(true);
+      setStarting(false);
+    }
   }
 
+  // Create the player only while the layer is switched on.
   useEffect(() => {
+    if (!stream.playing) return;
     let cancelled = false;
 
     async function init() {
@@ -132,10 +112,8 @@ function AmbiencePlayer({
       });
       if (cancelled || !containerRef.current || !window.YT) return;
 
-      // Build the iframe by hand rather than letting the API generate it: the
-      // `allow` attribute is only honoured at load time, so setting it later
-      // (as onReady did) never delegated autoplay permission at all — which is
-      // what kept Chrome refusing these layers.
+      // Built by hand because `allow` is only honoured at load time — setting
+      // it afterwards never delegates autoplay permission at all.
       const frame = document.createElement("iframe");
       frame.allow = "autoplay; encrypted-media";
       frame.width = "100%";
@@ -144,7 +122,6 @@ function AmbiencePlayer({
       const params = new URLSearchParams({
         enablejsapi: "1",
         playsinline: "1",
-        // Controls stay on so the embed is usable when it has to be revealed.
         controls: "1",
         // YouTube loops a single video only when it's given as a one-item list.
         loop: "1",
@@ -157,15 +134,20 @@ function AmbiencePlayer({
       playerRef.current = new window.YT.Player(frame, {
         events: {
           onReady: () => {
-            // The iframe src already carries the video, so there's nothing to
-            // load here — just set the levels and start if we're allowed to.
-            const player = playerRef.current;
             applyAudio();
-            if (wantPlaying.current && mayStart()) player?.playVideo();
-            else player?.pauseVideo();
+            if (wantPlaying.current && mayStart()) {
+              playerRef.current?.playVideo();
+              setStarting(true);
+            } else {
+              playerRef.current?.pauseVideo();
+            }
           },
           onStateChange: (e) => {
-            // Ambience loops forever rather than advancing anything.
+            if (e.data === window.YT?.PlayerState.PLAYING) {
+              setNeedsClick(false);
+              setStarting(false);
+              refusedTicks.current = 0;
+            }
             if (e.data === window.YT?.PlayerState.ENDED && wantPlaying.current) {
               playerRef.current?.seekTo?.(0, true);
               playerRef.current?.playVideo();
@@ -184,18 +166,19 @@ function AmbiencePlayer({
         // Already torn down.
       }
       playerRef.current = null;
+      setNeedsClick(false);
+      setStarting(false);
+      refusedTicks.current = 0;
       containerRef.current?.replaceChildren();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stream.videoId]);
+  }, [stream.videoId, stream.playing]);
 
-  // React straight away to a level change or the room's transport.
   useEffect(() => {
     reconcile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveVolume, muted]);
+  }, [effectiveVolume, muted, stream.playing]);
 
-  // Join the room-wide unmute gesture, so one click restores every layer.
   useEffect(
     () =>
       registerUnmuteTarget(() => {
@@ -208,28 +191,38 @@ function AmbiencePlayer({
     []
   );
 
-  // Ambience has no visible surface to click, so a listener can never grant it
-  // a gesture directly. Any click in the popover is one — use it to start the
-  // layers a browser refused to autoplay.
+  // Ambience has no surface of its own to click, so any click in the popover
+  // stands in for one.
   useEffect(() => registerGestureTarget(reconcile), []);
 
-  // Self-healing: covers a player that wasn't ready when settings changed.
   useEffect(() => {
     const timer = window.setInterval(reconcile, 3000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When revealed, the embed is cropped down to its centre, where YouTube's
-  // play button always sits — so this reads as a small play button while the
-  // click lands on the real iframe. Forwarding a click is impossible: a
-  // synthesised event carries no user activation into a cross-origin frame.
   return (
-    <div
-      className={needsClick ? "ambience-player ambience-player--peephole" : "ambience-player"}
-      title={needsClick ? `Play ${stream.title}` : undefined}
-    >
-      <div className="ambience-player-frame" ref={containerRef} />
-    </div>
+    <span className="amb-slot">
+      {/* Always mounted while playing; only visible when it has to be clicked. */}
+      <span
+        className={needsClick ? "ambience-player ambience-player--peephole" : "ambience-player"}
+        title={needsClick ? `Start ${stream.title}` : undefined}
+      >
+        <span className="ambience-player-frame" ref={containerRef} />
+      </span>
+
+      {!needsClick &&
+        (canControl ? (
+          <button
+            className={stream.playing ? "amb-toggle amb-toggle--on" : "amb-toggle"}
+            onClick={onToggle}
+            title={stream.playing ? "Stop" : "Play"}
+          >
+            {starting ? <span className="amb-spinner" /> : stream.playing ? "◼" : "▶"}
+          </button>
+        ) : (
+          starting && <span className="amb-spinner" />
+        ))}
+    </span>
   );
 }
