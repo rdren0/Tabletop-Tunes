@@ -16,6 +16,10 @@ interface PlayerStageProps {
   onTime?: (seconds: number) => void;
   /** Fired when playback had to start muted because the browser blocked audio. */
   onAutoMuted?: () => void;
+  /** Whether this client may write playback state for the whole room. */
+  canControl?: boolean;
+  /** A GM/DJ used the player's own controls; mirror it into room state. */
+  onLocalTransport?: (playing: boolean) => void;
   /** Video ids discovered inside a YouTube playlist, once it has loaded. */
   onPlaylistLoaded?: (videoIds: string[]) => void;
   onEnded: () => void;
@@ -36,6 +40,8 @@ export function PlayerStage({
   anchorAt,
   onTime,
   onAutoMuted,
+  canControl,
+  onLocalTransport,
   onPlaylistLoaded,
   onEnded,
 }: PlayerStageProps) {
@@ -61,6 +67,8 @@ export function PlayerStage({
         anchorAt={anchorAt}
         onTime={onTime}
         onAutoMuted={onAutoMuted}
+        canControl={canControl}
+        onLocalTransport={onLocalTransport}
         onPlaylistLoaded={onPlaylistLoaded}
         onEnded={onEnded}
       />
@@ -84,6 +92,8 @@ function YouTubeStage({
   anchorAt,
   onTime,
   onAutoMuted,
+  canControl,
+  onLocalTransport,
   onPlaylistLoaded,
   onEnded,
 }: Omit<PlayerStageProps, "item"> & { item: QueueItem }) {
@@ -102,6 +112,7 @@ function YouTubeStage({
   mutedRef.current = muted;
 
   function requestPlay() {
+    lastPlayRequest.current = Date.now();
     playerRef.current?.playVideo();
   }
 
@@ -125,6 +136,16 @@ function YouTubeStage({
   // Once the listener has deliberately unmuted, never auto-mute them again —
   // otherwise the fallback and the listener fight each other.
   const userUnmuted = useRef(false);
+  // A listener may stop their own audio. Once they have, stop trying to
+  // restart them — but they still can't start playback the room hasn't.
+  const userPaused = useRef(false);
+  // When we last asked the player to play, so a pause that lands right after
+  // reads as the browser refusing rather than the listener choosing.
+  const lastPlayRequest = useRef(0);
+  const canControlRef = useRef(canControl);
+  canControlRef.current = canControl;
+  const onLocalTransportRef = useRef(onLocalTransport);
+  onLocalTransportRef.current = onLocalTransport;
 
   // Join the room-wide unmute gesture so one click restores every player.
   useEffect(
@@ -208,9 +229,18 @@ function YouTubeStage({
       const ended = state === window.YT?.PlayerState.ENDED;
 
       if (!isPlayingRef.current) {
-        // Pausing always works, so it's simply enforced.
+        // Nobody may start playback the room hasn't, so a paused room is
+        // enforced on every client — including one that hit YouTube's own
+        // play button.
         stalledTicks.current = 0;
         if (playing) player.pauseVideo();
+        return;
+      }
+
+      // A listener who stopped their own audio stays stopped; they simply
+      // can't start it again until the room does.
+      if (userPaused.current) {
+        stalledTicks.current = 0;
         return;
       }
 
@@ -295,7 +325,30 @@ function YouTubeStage({
             loadCurrentItem();
           },
           onStateChange: (e) => {
-            if (e.data === window.YT?.PlayerState.ENDED) onEndedRef.current();
+            const YT = window.YT;
+            if (!YT) return;
+            if (e.data === YT.PlayerState.ENDED) {
+              onEndedRef.current();
+              return;
+            }
+            if (e.data === YT.PlayerState.PLAYING) {
+              userPaused.current = false;
+              // A GM or DJ pressing YouTube's own play button is a real user
+              // gesture — the one thing the API can't fake — so let it drive
+              // the room rather than being overwritten a moment later.
+              if (canControlRef.current && !isPlayingRef.current) {
+                onLocalTransportRef.current?.(true);
+              }
+              return;
+            }
+            if (e.data === YT.PlayerState.PAUSED) {
+              // A pause immediately after we asked to play is the browser
+              // refusing, not a decision by whoever is watching.
+              const refused = Date.now() - lastPlayRequest.current < 2000;
+              if (refused || !isPlayingRef.current) return;
+              if (canControlRef.current) onLocalTransportRef.current?.(false);
+              else userPaused.current = true;
+            }
           },
         },
       });
@@ -347,8 +400,14 @@ function YouTubeStage({
   // React to play/pause toggles the GM or a DJ made for the whole room.
   useEffect(() => {
     if (!readyRef.current) return;
-    if (isPlaying) requestPlay();
-    else playerRef.current?.pauseVideo();
+    // A fresh play from the room clears any local stop.
+    if (isPlaying) {
+      userPaused.current = false;
+      stalledTicks.current = 0;
+      requestPlay();
+    } else {
+      playerRef.current?.pauseVideo();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying]);
 

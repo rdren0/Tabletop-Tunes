@@ -352,6 +352,11 @@ export default function App() {
           setMuted(true);
           setAutoMuted(true);
         }}
+        canControl={canControl}
+        onLocalTransport={(playing) => {
+          if (!canControl) return;
+          patchRoom({ isPlaying: playing, ...anchorHere() });
+        }}
         onPlaylistLoaded={setPlaylistIds}
         onEnded={handleEnded}
       />
