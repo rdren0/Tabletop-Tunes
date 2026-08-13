@@ -9,7 +9,7 @@ import {
 } from "./lib/useOwlbear";
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
-import { PlayerStage } from "./components/PlayerStage";
+import { PlayerControls, PlayerStage } from "./components/PlayerStage";
 import { QueueItem, SongRequest } from "./types";
 import { SPOTIFY_ENABLED } from "./config";
 
@@ -47,6 +47,14 @@ export default function App() {
   // This client's live playback position, kept out of state so the 2s
   // heartbeat doesn't re-render the whole popover.
   const positionRef = useRef(0);
+  const playerControls = useRef<PlayerControls | null>(null);
+
+  /** Unmute inside the click itself, then let state follow. */
+  function unmuteNow() {
+    playerControls.current?.unmuteWithGesture();
+    setMuted(false);
+    setAutoMuted(false);
+  }
 
   // Clearing wipes the queue for everyone, so it takes two clicks. Forget the
   // pending confirmation if the second click doesn't come promptly.
@@ -307,6 +315,7 @@ export default function App() {
           setMuted(true);
           setAutoMuted(true);
         }}
+        controlsRef={playerControls}
         onPlaylistLoaded={setPlaylistIds}
         onEnded={handleEnded}
       />
@@ -338,8 +347,8 @@ export default function App() {
             type="button"
             className="mute"
             onClick={() => {
-              setMuted((m) => !m);
-              setAutoMuted(false);
+              if (muted) unmuteNow();
+              else setMuted(true);
             }}
             disabled={spotifyActive}
             title={
@@ -360,7 +369,7 @@ export default function App() {
             disabled={spotifyActive}
             onChange={(e) => {
               setVolume(Number(e.target.value));
-              setMuted(false);
+              if (muted) unmuteNow();
             }}
           />
         </div>

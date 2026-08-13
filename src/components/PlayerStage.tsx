@@ -1,7 +1,17 @@
-import { useEffect, useRef } from "react";
+import { MutableRefObject, useEffect, useRef } from "react";
 import { loadScriptOnce } from "../lib/loadScript";
 import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
 import { SPOTIFY_ENABLED } from "../config";
+
+/**
+ * Imperative hooks the UI needs to call *synchronously* from a click handler.
+ * Browsers only honour audio changes inside the user gesture itself, so going
+ * through state and an effect is too late — the gesture window has closed and
+ * playback gets paused instead.
+ */
+export interface PlayerControls {
+  unmuteWithGesture(): void;
+}
 
 interface PlayerStageProps {
   item: QueueItem | null;
@@ -15,6 +25,8 @@ interface PlayerStageProps {
   onTime?: (seconds: number) => void;
   /** Fired when playback had to start muted because the browser blocked audio. */
   onAutoMuted?: () => void;
+  /** Populated with imperative controls the UI calls during a click. */
+  controlsRef?: MutableRefObject<PlayerControls | null>;
   /** Video ids discovered inside a YouTube playlist, once it has loaded. */
   onPlaylistLoaded?: (videoIds: string[]) => void;
   onEnded: () => void;
@@ -35,6 +47,7 @@ export function PlayerStage({
   anchorAt,
   onTime,
   onAutoMuted,
+  controlsRef,
   onPlaylistLoaded,
   onEnded,
 }: PlayerStageProps) {
@@ -60,6 +73,7 @@ export function PlayerStage({
         anchorAt={anchorAt}
         onTime={onTime}
         onAutoMuted={onAutoMuted}
+        controlsRef={controlsRef}
         onPlaylistLoaded={onPlaylistLoaded}
         onEnded={onEnded}
       />
@@ -83,6 +97,7 @@ function YouTubeStage({
   anchorAt,
   onTime,
   onAutoMuted,
+  controlsRef,
   onPlaylistLoaded,
   onEnded,
 }: Omit<PlayerStageProps, "item"> & { item: QueueItem }) {
@@ -121,6 +136,28 @@ function YouTubeStage({
   // A just-created player sits in UNSTARTED for a moment; without a grace
   // period that reads as a refusal and flashes the tap prompt on every load.
   const readyAt = useRef(0);
+  // Once the listener has deliberately unmuted, never auto-mute them again —
+  // otherwise the fallback and the listener fight each other.
+  const userUnmuted = useRef(false);
+
+  // Expose the gesture-sensitive controls to the UI.
+  useEffect(() => {
+    if (!controlsRef) return;
+    controlsRef.current = {
+      unmuteWithGesture() {
+        const player = playerRef.current;
+        if (!player) return;
+        userUnmuted.current = true;
+        stalledTicks.current = 0;
+        player.unMute?.();
+        player.setVolume?.(volumeRef.current);
+        if (isPlayingRef.current) player.playVideo();
+      },
+    };
+    return () => {
+      controlsRef.current = null;
+    };
+  }, [controlsRef]);
 
   /** Where the room expects this client to be, in seconds into the track. */
   function expectedPosition(): number | null {
@@ -200,7 +237,7 @@ function YouTubeStage({
       // window does with no media engagement history. Muted playback is
       // permitted everywhere, so start in sync without sound and let the
       // listener unmute with the speaker button already in the transport.
-      if (stalledTicks.current === 3) {
+      if (stalledTicks.current === 3 && !userUnmuted.current) {
         player.mute?.();
         player.playVideo();
         onAutoMutedRef.current?.();
