@@ -158,6 +158,7 @@ function YouTubeStage({
   function mayStart(): boolean {
     return hasGestured() || roomStarted.current;
   }
+
   const canControlRef = useRef(canControl);
   canControlRef.current = canControl;
   const onLocalTransportRef = useRef(onLocalTransport);
@@ -327,39 +328,28 @@ function YouTubeStage({
       });
       if (cancelled || !containerRef.current || !window.YT) return;
 
-      // Build the iframe ourselves: `allow` is only honoured at load time, so
-      // setting it in onReady (as before) never delegated autoplay permission.
-      // It's also a node React never rendered, so React isn't left trying to
-      // remove something the API replaced — which used to blank the whole app.
-      const link = itemRef.current.link;
-      const frame = document.createElement("iframe");
-      frame.allow = "autoplay; encrypted-media; picture-in-picture";
-      frame.width = "100%";
-      frame.height = "100%";
-      frame.style.border = "0";
-      const params = new URLSearchParams({
-        enablejsapi: "1",
-        playsinline: "1",
-        origin: window.location.origin,
-      });
-      frame.src =
-        link.kind === "playlist"
-          ? `https://www.youtube.com/embed/videoseries?list=${link.mediaId}&${params}`
-          : `https://www.youtube.com/embed/${link.mediaId}?${params}`;
-      containerRef.current.appendChild(frame);
+      // The YouTube API replaces the element it's given. Hand it a detached
+      // child React never rendered, so React isn't left trying to remove a
+      // node that no longer exists (which throws and blanks the whole app).
+      const mount = document.createElement("div");
+      containerRef.current.appendChild(mount);
 
-      playerRef.current = new window.YT.Player(frame, {
+      playerRef.current = new window.YT.Player(mount, {
+        width: "100%",
+        height: "100%",
+        playerVars: { playsinline: 1 },
         events: {
           onReady: () => {
             readyRef.current = true;
             readyAt.current = Date.now();
-            lastLoadAt.current = Date.now();
-            lastKeyRef.current = mediaKeyOf(itemRef.current);
-            // The iframe src already carries this track, so there's nothing to
-            // load — just apply the audio settings and start if allowed.
+            // A nested iframe only gets autoplay permission if every ancestor
+            // delegates it; harmless when the host frame doesn't.
+            const frame = playerRef.current?.getIframe?.();
+            if (frame) frame.allow = "autoplay; encrypted-media";
+            // Apply audio settings here too: the player ignores them until it
+            // exists, so anything set before this point never reached it.
             applyAudio();
-            if (isPlayingRef.current && mayStart()) requestPlay();
-            else playerRef.current?.pauseVideo();
+            loadCurrentItem();
           },
           onStateChange: (e) => {
             const YT = window.YT;
@@ -424,19 +414,11 @@ function YouTubeStage({
     const shouldPlay = isPlayingRef.current && mayStart();
     lastLoadAt.current = Date.now();
     if (link.kind === "playlist") {
-      if (shouldPlay || !player.cuePlaylist) {
-        player.loadPlaylist({ list: link.mediaId });
-        if (!shouldPlay) player.pauseVideo();
-      } else {
-        player.cuePlaylist({ list: link.mediaId });
-      }
-    } else if (shouldPlay || !player.cueVideoById) {
-      // Falling back to load+pause rather than letting an absent cue method
-      // silently do nothing and leave the player empty.
-      player.loadVideoById(link.mediaId);
-      if (!shouldPlay) player.pauseVideo();
+      if (shouldPlay) player.loadPlaylist({ list: link.mediaId });
+      else player.cuePlaylist?.({ list: link.mediaId });
     } else {
-      player.cueVideoById(link.mediaId);
+      if (shouldPlay) player.loadVideoById(link.mediaId);
+      else player.cueVideoById?.(link.mediaId);
     }
     lastKeyRef.current = mediaKeyOf(itemRef.current);
     if (shouldPlay) requestPlay();
@@ -461,7 +443,6 @@ function YouTubeStage({
       firstTransportRun.current = false;
       if (isPlaying) return;
     }
-
     // A fresh play from the room clears any local stop.
     if (isPlaying) {
       roomStarted.current = true;
