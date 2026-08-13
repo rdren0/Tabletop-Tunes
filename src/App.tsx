@@ -50,9 +50,6 @@ export default function App() {
   // Its own mute, independent of the music's — ambience is a separate layer,
   // so silencing one shouldn't silence the other.
   const [ambienceMuted, setAmbienceMuted] = useState(false);
-  // The video is incidental — this is a music player — so it stays out of the
-  // way until someone asks for it.
-  const [showVideo, setShowVideo] = useState(false);
   const [ambienceInput, setAmbienceInput] = useState("");
   const [ambienceError, setAmbienceError] = useState<string | null>(null);
   const [playlistIds, setPlaylistIds] = useState<string[]>([]);
@@ -357,16 +354,9 @@ export default function App() {
 
   return (
     <div className="app">
-      <button className="video-toggle" onClick={() => setShowVideo((v) => !v)}>
-        <span>{showVideo ? "▾" : "▸"} Video</span>
-        <span className="video-toggle-meta">{showVideo ? "hide" : "show"}</span>
-      </button>
-
-      {/* Collapsed by default, but never unmounted — removing the iframe would
-          stop the audio, and a zero-size one can be treated as hidden and
-          refused, so it parks at a sliver instead. */}
-      <div className={showVideo ? "video-wrap" : "video-wrap video-wrap--collapsed"}>
-        <PlayerStage
+      {/* Always visible: YouTube's own play button is the one control a browser
+          always honours, so it has to stay reachable. */}
+      <PlayerStage
           item={currentItem}
           isPlaying={room.isPlaying}
           volume={volume}
@@ -385,10 +375,9 @@ export default function App() {
             if (!canControl) return;
             patchRoom({ isPlaying: playing, ...anchorHere() });
           }}
-          onPlaylistLoaded={setPlaylistIds}
-          onEnded={handleEnded}
-        />
-      </div>
+        onPlaylistLoaded={setPlaylistIds}
+        onEnded={handleEnded}
+      />
 
       <div className="transport">
         <button onClick={() => skip(-1)} disabled={!canControl || room.queue.length === 0} title="Previous">
