@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { loadScriptOnce } from "../lib/loadScript";
-import { registerGestureTarget, registerUnmuteTarget } from "../lib/audioGestures";
+import { mayAutoStart, registerGestureTarget, registerUnmuteTarget } from "../lib/audioGestures";
 import { AmbienceStream } from "../types";
 
 interface AmbienceStageProps {
@@ -82,6 +82,9 @@ function AmbiencePlayer({
       if (playing || buffering) player.pauseVideo();
       return;
     }
+    // Never start merely because the panel opened onto a room that already had
+    // layers running; wait for a click or a change during the session.
+    if (!mayAutoStart()) return;
     if (!playing && !buffering) player.playVideo();
   }
 
@@ -107,9 +110,11 @@ function AmbiencePlayer({
           onReady: () => {
             const frame = playerRef.current?.getIframe?.();
             if (frame) frame.allow = "autoplay; encrypted-media";
-            playerRef.current?.loadVideoById(stream.videoId);
+            // Cue rather than load: load*() starts playing on arrival, which
+            // would be exactly the unprompted audio we're avoiding.
+            playerRef.current?.cueVideoById?.(stream.videoId);
             applyAudio();
-            if (wantPlaying.current) playerRef.current?.playVideo();
+            if (wantPlaying.current && mayAutoStart()) playerRef.current?.playVideo();
           },
           onStateChange: (e) => {
             // Ambience loops forever rather than advancing anything.

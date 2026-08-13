@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { registerUnmuteTarget } from "../lib/audioGestures";
+import { mayAutoStart, registerUnmuteTarget } from "../lib/audioGestures";
 import { loadScriptOnce } from "../lib/loadScript";
 import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
 import { SPOTIFY_ENABLED } from "../config";
@@ -145,6 +145,10 @@ function YouTubeStage({
   // Loading a video can emit a PLAYING state on its own; that isn't someone
   // pressing play, so it must not be mirrored into room state.
   const lastLoadAt = useRef(0);
+  // When playback was last genuinely running. A pause is only somebody's
+  // decision if it interrupts real playback; otherwise it's the browser
+  // refusing, and mirroring that would stop the whole room.
+  const playingSince = useRef(0);
   const canControlRef = useRef(canControl);
   canControlRef.current = canControl;
   const onLocalTransportRef = useRef(onLocalTransport);
@@ -263,6 +267,7 @@ function YouTubeStage({
 
       // The room wants playback but this client isn't playing. Retry first —
       // that recovers the ordinary cases silently.
+      if (!mayAutoStart()) return;
       if (Date.now() - readyAt.current < 3000) return;
       stalledTicks.current += 1;
       if (stalledTicks.current <= 2) {
@@ -345,6 +350,7 @@ function YouTubeStage({
             }
             if (e.data === YT.PlayerState.PLAYING) {
               userPaused.current = false;
+              playingSince.current = Date.now();
               // A GM or DJ pressing YouTube's own play button is a real user
               // gesture — the one thing the API can't fake — so let it drive
               // the room rather than being overwritten a moment later.
@@ -355,10 +361,13 @@ function YouTubeStage({
               return;
             }
             if (e.data === YT.PlayerState.PAUSED) {
-              // A pause immediately after we asked to play is the browser
-              // refusing, not a decision by whoever is watching.
+              // Only a pause that interrupts playback which was genuinely
+              // running counts as somebody's decision. Anything else is the
+              // browser refusing, and mirroring that would stop the room.
+              const wasRunning = playingSince.current > 0 && Date.now() - playingSince.current > 1000;
+              playingSince.current = 0;
               const refused = Date.now() - lastPlayRequest.current < 2000;
-              if (refused || !isPlayingRef.current) return;
+              if (refused || !wasRunning || !isPlayingRef.current) return;
               if (canControlRef.current) onLocalTransportRef.current?.(false);
               else userPaused.current = true;
             }
@@ -392,7 +401,7 @@ function YouTubeStage({
     // load*() begins playing immediately. When the room is paused — a listener
     // opening the panel before the GM has started anything — cue instead, so
     // nothing blares for a moment before the reconcile pauses it again.
-    const shouldPlay = isPlayingRef.current;
+    const shouldPlay = isPlayingRef.current && mayAutoStart();
     lastLoadAt.current = Date.now();
     if (link.kind === "playlist") {
       if (shouldPlay) player.loadPlaylist({ list: link.mediaId });

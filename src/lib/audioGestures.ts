@@ -34,5 +34,19 @@ export function registerGestureTarget(target: UnmuteTarget): () => void {
 }
 
 export function notifyGesture(): void {
+  gestured = true;
   gestureTargets.forEach((target) => target());
+}
+
+let gestured = false;
+const pageLoadedAt = Date.now();
+
+/**
+ * Nothing may start playing merely because a panel opened onto a room that
+ * happens to be mid-track — that lands as audio blaring out of nowhere. Sound
+ * needs either a click on this client, or a change that arrived while the
+ * listener was already sitting there.
+ */
+export function mayAutoStart(): boolean {
+  return gestured || Date.now() - pageLoadedAt > 2500;
 }
