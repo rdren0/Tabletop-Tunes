@@ -21,9 +21,11 @@ declare global {
         }
       ) => YTPlayer;
       PlayerState: {
+        UNSTARTED: number;
         ENDED: number;
         PLAYING: number;
         PAUSED: number;
+        BUFFERING: number;
         CUED: number;
       };
     };

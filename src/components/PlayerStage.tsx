@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { loadScriptOnce } from "../lib/loadScript";
 import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
 import { SPOTIFY_ENABLED } from "../config";
@@ -95,20 +95,8 @@ function YouTubeStage({
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
-  // Browsers refuse programmatic playback until the listener has interacted
-  // with the page, so a client that just opened the popover can stay silent
-  // while everyone else is hearing the track. Detect that and offer a tap.
-  const [needsGesture, setNeedsGesture] = useState(false);
-
   function requestPlay() {
-    const player = playerRef.current;
-    if (!player) return;
-    player.playVideo();
-    window.setTimeout(() => {
-      if (!isPlayingRef.current || !playerRef.current) return;
-      const state = playerRef.current.getPlayerState?.();
-      if (state !== window.YT?.PlayerState.PLAYING) setNeedsGesture(true);
-    }, 1500);
+    playerRef.current?.playVideo();
   }
 
   const anchorPositionRef = useRef(anchorPosition);
@@ -120,6 +108,12 @@ function YouTubeStage({
   const onPlaylistLoadedRef = useRef(onPlaylistLoaded);
   onPlaylistLoadedRef.current = onPlaylistLoaded;
   const lastPlaylistRef = useRef("");
+  // Consecutive heartbeats where the room wanted playback but this client
+  // wasn't playing — one retry before bothering the listener for a tap.
+  const stalledTicks = useRef(0);
+  // A just-created player sits in UNSTARTED for a moment; without a grace
+  // period that reads as a refusal and flashes the tap prompt on every load.
+  const readyAt = useRef(0);
 
   /** Where the room expects this client to be, in seconds into the track. */
   function expectedPosition(): number | null {
@@ -139,8 +133,10 @@ function YouTubeStage({
     if (!player || !readyRef.current) return;
     const target = expectedPosition();
     if (target === null) return;
+    // A duration of 0 means the video hasn't loaded yet; seeking now would
+    // land somewhere meaningless.
     const duration = player.getDuration?.() ?? 0;
-    if (duration > 0 && target >= duration - 1) return;
+    if (duration <= 0 || target >= duration - 1) return;
     const actual = player.getCurrentTime?.() ?? 0;
     if (Math.abs(actual - target) > SYNC_TOLERANCE_SECONDS) {
       player.seekTo?.(target, true);
@@ -162,6 +158,36 @@ function YouTubeStage({
 
       onTimeRef.current?.(player.getCurrentTime?.() ?? 0);
       if (isPlayingRef.current) syncToAnchor();
+
+      // Keep watching rather than checking once after a play request: phones
+      // block autoplay outright, and a client that was already sitting on the
+      // popover can miss a single post-request check and stay silent.
+      // The room is the source of truth: whatever the GM or a DJ set, every
+      // client converges here, even one that missed the original transition.
+      const state = player.getPlayerState?.();
+      const playing = state === window.YT?.PlayerState.PLAYING;
+      const buffering = state === window.YT?.PlayerState.BUFFERING;
+      const ended = state === window.YT?.PlayerState.ENDED;
+
+      if (!isPlayingRef.current) {
+        // Pausing always works, so it's simply enforced.
+        stalledTicks.current = 0;
+        if (playing) player.pauseVideo();
+        return;
+      }
+
+      if (playing || buffering || ended) {
+        stalledTicks.current = 0;
+        return;
+      }
+
+      // The room wants playback but this client isn't playing. Retry a few
+      // times — that recovers most cases silently. If the browser is genuinely
+      // refusing (phones always do), stop and leave YouTube's own play button
+      // visible, which listeners already know how to use.
+      if (Date.now() - readyAt.current < 3000) return;
+      stalledTicks.current += 1;
+      if (stalledTicks.current <= 3) player.playVideo();
 
       if (itemRef.current.link.kind === "playlist") {
         const ids = player.getPlaylist?.() ?? null;
@@ -210,6 +236,7 @@ function YouTubeStage({
         events: {
           onReady: () => {
             readyRef.current = true;
+            readyAt.current = Date.now();
             // A nested iframe only gets autoplay permission if every ancestor
             // delegates it; harmless when the host frame doesn't.
             const frame = playerRef.current?.getIframe?.();
@@ -220,7 +247,6 @@ function YouTubeStage({
             loadCurrentItem();
           },
           onStateChange: (e) => {
-            if (e.data === window.YT?.PlayerState.PLAYING) setNeedsGesture(false);
             if (e.data === window.YT?.PlayerState.ENDED) onEndedRef.current();
           },
         },
@@ -273,12 +299,8 @@ function YouTubeStage({
   // React to play/pause toggles the GM or a DJ made for the whole room.
   useEffect(() => {
     if (!readyRef.current) return;
-    if (isPlaying) {
-      requestPlay();
-    } else {
-      setNeedsGesture(false);
-      playerRef.current?.pauseVideo();
-    }
+    if (isPlaying) requestPlay();
+    else playerRef.current?.pauseVideo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying]);
 
@@ -290,22 +312,10 @@ function YouTubeStage({
   }, [volume, muted]);
 
   // The mount node is deliberately childless in JSX: the embed lives in a plain
-  // DOM node created in the effect above, outside React's control. The overlay
-  // is a sibling of that node, so React never has to reconcile around it.
+  // DOM node created in the effect above, outside React's control.
   return (
     <div className="player-stage player-stage--youtube">
       <div className="player-mount" ref={containerRef} />
-      {needsGesture && (
-        <button
-          className="tap-to-play"
-          onClick={() => {
-            setNeedsGesture(false);
-            playerRef.current?.playVideo();
-          }}
-        >
-          ▶ Tap to start audio
-        </button>
-      )}
     </div>
   );
 }
