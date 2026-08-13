@@ -9,9 +9,8 @@ import {
 } from "./lib/useOwlbear";
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
-import { PlayerStage } from "./components/PlayerStage";
-import { AmbienceStage } from "./components/AmbienceStage";
-import { unmuteAll } from "./lib/audioGestures";
+import { readLocalAudio, writeLocalAudio } from "./lib/localAudio";
+import { readFramePlaylist, subscribeFramePlaylist } from "./lib/framePlaylist";
 import { AmbienceStream, QueueItem, SongRequest } from "./types";
 import { SPOTIFY_ENABLED } from "./config";
 
@@ -30,11 +29,13 @@ export default function App() {
   const [inputValue, setInputValue] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [volume, setVolume] = useState(70);
-  const [muted, setMuted] = useState(false);
-  // True when the browser refused audio and playback started muted, so the
-  // speaker button can be explained rather than just looking wrong.
-  const [autoMuted, setAutoMuted] = useState(false);
+  // These belong to this listener alone and are handed to the background page,
+  // which is where playback actually happens.
+  const [volume, setVolume] = useState(() => readLocalAudio().volume);
+  const [muted, setMuted] = useState(() => readLocalAudio().muted);
+  useEffect(() => {
+    writeLocalAudio({ volume, muted });
+  }, [volume, muted]);
   const [showDjPanel, setShowDjPanel] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [spotifyNotice, setSpotifyNotice] = useState(false);
@@ -47,18 +48,10 @@ export default function App() {
   const [showAmbience, setShowAmbience] = useState(false);
   const [ambienceInput, setAmbienceInput] = useState("");
   const [ambienceError, setAmbienceError] = useState<string | null>(null);
-  const [playlistIds, setPlaylistIds] = useState<string[]>([]);
+  // Discovered by the background page's player and passed across frames.
+  const [playlistIds, setPlaylistIds] = useState<string[]>(readFramePlaylist);
+  useEffect(() => subscribeFramePlaylist(setPlaylistIds), []);
   const [playlistTitles, setPlaylistTitles] = useState<Record<string, string>>({});
-  // This client's live playback position, kept out of state so the 2s
-  // heartbeat doesn't re-render the whole popover.
-  const positionRef = useRef(0);
-  /** Unmute inside the click itself, then let state follow. */
-  function unmuteNow() {
-    unmuteAll();
-    setMuted(false);
-    setAutoMuted(false);
-  }
-
   // Clearing wipes the queue for everyone, so it takes two clicks. Forget the
   // pending confirmation if the second click doesn't come promptly.
   useEffect(() => {
@@ -73,18 +66,6 @@ export default function App() {
   // Spotify's embed exposes no volume API, so the controls would silently lie.
   const spotifyActive = currentItem?.link.source === "spotify";
   const currentIsPlaylist = currentItem?.link.kind === "playlist";
-
-  // Long tracks drift, so the client driving the queue republishes its position
-  // periodically. Exactly one writer, same as auto-advance.
-  useEffect(() => {
-    if (!room.isPlaying) return;
-    const timer = window.setInterval(() => {
-      if (!isAdvancer()) return;
-      patchRoom({ anchorPosition: positionRef.current, anchorAt: Date.now() });
-    }, 15000);
-    return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room.isPlaying, room.currentIndex, isGM, isDJ, playerId, party.length]);
 
   // Look up titles for the tracks inside an expanded playlist, keylessly.
   useEffect(() => {
@@ -161,11 +142,6 @@ export default function App() {
     return { anchorPosition: 0, anchorAt: Date.now() };
   }
 
-  /** Anchor at wherever this client currently is, for pause/resume in place. */
-  function anchorHere() {
-    return { anchorPosition: positionRef.current, anchorAt: Date.now() };
-  }
-
   function playAt(index: number) {
     if (!canControl) return;
     setShowPlaylist(false);
@@ -174,7 +150,9 @@ export default function App() {
 
   function togglePlay() {
     if (!canControl) return;
-    patchRoom({ isPlaying: !room.isPlaying, ...anchorHere() });
+    // Only the flag: the background page owns the position and re-anchors
+    // around this, since it's the side that knows where playback actually is.
+    patchRoom({ isPlaying: !room.isPlaying });
   }
 
   function skip(delta: 1 | -1) {
@@ -225,29 +203,6 @@ export default function App() {
     // Dropping currentIndex back to -1 unmounts the embed entirely, so the
     // stage returns to its empty state rather than holding the last track.
     patchRoom({ queue: [], currentIndex: -1, isPlaying: false });
-  }
-
-  /**
-   * Exactly one client drives the queue forward, otherwise every controller
-   * would skip on the same "ended" event and jump several tracks at once. The
-   * GM owns that job; if no GM is connected the lowest-sorted connected DJ
-   * takes over, so the list keeps playing instead of stalling.
-   */
-  function isAdvancer(): boolean {
-    if (isGM) return true;
-    if (party.some((p) => p.role === "GM")) return false;
-    if (!playerId || !isDJ) return false;
-    const connectedDjs = [playerId, ...party.map((p) => p.id)]
-      .filter((id) => room.djIds.includes(id))
-      .sort();
-    return connectedDjs[0] === playerId;
-  }
-
-  function handleEnded() {
-    if (!isAdvancer()) return;
-    if (room.queue.length === 0) return;
-    const next = (room.currentIndex + 1) % room.queue.length;
-    patchRoom({ currentIndex: next, isPlaying: true, ...restartAnchor() });
   }
 
   /** A listener without control proposes a track for a GM or DJ to approve. */
@@ -338,28 +293,23 @@ export default function App() {
 
   return (
     <div className="app">
-      <PlayerStage
-        item={currentItem}
-        isPlaying={room.isPlaying}
-        volume={volume}
-        muted={muted}
-        anchorPosition={room.anchorPosition}
-        anchorAt={room.anchorAt}
-        onTime={(seconds) => {
-          positionRef.current = seconds;
-        }}
-        onAutoMuted={() => {
-          setMuted(true);
-          setAutoMuted(true);
-        }}
-        canControl={canControl}
-        onLocalTransport={(playing) => {
-          if (!canControl) return;
-          patchRoom({ isPlaying: playing, ...anchorHere() });
-        }}
-        onPlaylistLoaded={setPlaylistIds}
-        onEnded={handleEnded}
-      />
+      {/* Audio runs in the background page so it survives this panel closing;
+          the popover is the control surface and shows what's playing. */}
+      <div className="now-playing">
+        {currentItem ? (
+          <>
+            <span className={`badge badge--${currentItem.link.source}`}>
+              {SOURCE_LABEL[currentItem.link.source]}
+            </span>
+            <span className="now-playing-title" title={currentItem.url}>
+              {currentItem.title}
+            </span>
+            <span className="now-playing-state">{room.isPlaying ? "▶" : "⏸"}</span>
+          </>
+        ) : (
+          <span className="now-playing-title">Nothing playing.</span>
+        )}
+      </div>
 
       <div className="transport">
         <button onClick={() => skip(-1)} disabled={!canControl || room.queue.length === 0} title="Previous">
@@ -387,10 +337,7 @@ export default function App() {
           <button
             type="button"
             className="mute"
-            onClick={() => {
-              if (muted) unmuteNow();
-              else setMuted(true);
-            }}
+            onClick={() => setMuted((m) => !m)}
             disabled={spotifyActive}
             title={
               spotifyActive
@@ -410,7 +357,7 @@ export default function App() {
             disabled={spotifyActive}
             onChange={(e) => {
               setVolume(Number(e.target.value));
-              if (muted) unmuteNow();
+              setMuted(false);
             }}
           />
         </div>
@@ -431,13 +378,7 @@ export default function App() {
           </button>
         )}
       </div>
-      <AmbienceStage streams={room.ambience} masterVolume={volume} muted={muted} />
 
-      {autoMuted && muted && (
-        <p className="hint hint--dj">
-          Your browser blocked audio. Tap 🔇, or tap the video itself if that doesn't take.
-        </p>
-      )}
       {!canControl && <p className="hint">Listening only.</p>}
       {!isGM && isDJ && <p className="hint hint--dj">You have DJ access.</p>}
 

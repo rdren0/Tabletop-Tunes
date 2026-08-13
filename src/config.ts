@@ -7,4 +7,4 @@
  * features. Whoever adds the first Spotify link of a session gets a warning
  * saying so. Set to false to accept YouTube links only.
  */
-export const SPOTIFY_ENABLED = true;
+export const SPOTIFY_ENABLED = false;

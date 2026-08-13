@@ -9,6 +9,14 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true,
+    rollupOptions: {
+      // Two entry points: the popover UI, and the background page Owlbear
+      // keeps alive so audio keeps playing when the popover is closed.
+      input: {
+        main: "index.html",
+        background: "background.html",
+      },
+    },
   },
   server: {
     allowedHosts: true,
