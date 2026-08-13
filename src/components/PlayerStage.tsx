@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { hasGestured, registerUnmuteTarget } from "../lib/audioGestures";
 import { loadScriptOnce } from "../lib/loadScript";
-import { QueueItem, SYNC_LEAD_SECONDS, SYNC_TOLERANCE_SECONDS } from "../types";
+import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
 import { SPOTIFY_ENABLED } from "../config";
 
 interface PlayerStageProps {
@@ -200,7 +200,7 @@ function YouTubeStage({
     // listener to a bogus position.
     const elapsed = (Date.now() - anchorAtRef.current) / 1000;
     if (elapsed < 0 || elapsed > 3600) return null;
-    return anchorPositionRef.current + elapsed + SYNC_LEAD_SECONDS;
+    return anchorPositionRef.current + elapsed;
   }
 
   /** Seek only when drift is bad enough to be worth the rebuffer. */

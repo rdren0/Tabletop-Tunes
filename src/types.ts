@@ -60,10 +60,3 @@ export const ROOM_METADATA_KEY = "rodeo.tabletoptunes/state";
 
 /** Seconds of drift tolerated before a client seeks to catch up. */
 export const SYNC_TOLERANCE_SECONDS = 2;
-
-/**
- * Seek slightly ahead of where the room says it is. Loading and buffering eat
- * about a second before a listener actually hears anything, so aiming at the
- * present lands them behind; aiming a second ahead lands them level.
- */
-export const SYNC_LEAD_SECONDS = 1;
