@@ -111,10 +111,19 @@ function AmbiencePlayer({
             const frame = playerRef.current?.getIframe?.();
             if (frame) frame.allow = "autoplay; encrypted-media";
             // Cue rather than load: load*() starts playing on arrival, which
-            // would be exactly the unprompted audio we're avoiding.
-            playerRef.current?.cueVideoById?.(stream.videoId);
+            // would be exactly the unprompted audio we're avoiding. Fall back
+            // to load+pause if the cue method isn't there, so the layer never
+            // ends up empty.
+            const player = playerRef.current;
+            const start = wantPlaying.current && mayAutoStart();
+            if (player?.cueVideoById && !start) {
+              player.cueVideoById(stream.videoId);
+            } else {
+              player?.loadVideoById(stream.videoId);
+              if (!start) player?.pauseVideo();
+            }
             applyAudio();
-            if (wantPlaying.current && mayAutoStart()) playerRef.current?.playVideo();
+            if (start) player?.playVideo();
           },
           onStateChange: (e) => {
             // Ambience loops forever rather than advancing anything.

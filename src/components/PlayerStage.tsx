@@ -404,11 +404,19 @@ function YouTubeStage({
     const shouldPlay = isPlayingRef.current && mayAutoStart();
     lastLoadAt.current = Date.now();
     if (link.kind === "playlist") {
-      if (shouldPlay) player.loadPlaylist({ list: link.mediaId });
-      else player.cuePlaylist?.({ list: link.mediaId });
+      if (shouldPlay || !player.cuePlaylist) {
+        player.loadPlaylist({ list: link.mediaId });
+        if (!shouldPlay) player.pauseVideo();
+      } else {
+        player.cuePlaylist({ list: link.mediaId });
+      }
+    } else if (shouldPlay || !player.cueVideoById) {
+      // Falling back to load+pause rather than letting an absent cue method
+      // silently do nothing and leave the player empty.
+      player.loadVideoById(link.mediaId);
+      if (!shouldPlay) player.pauseVideo();
     } else {
-      if (shouldPlay) player.loadVideoById(link.mediaId);
-      else player.cueVideoById?.(link.mediaId);
+      player.cueVideoById(link.mediaId);
     }
     lastKeyRef.current = mediaKeyOf(itemRef.current);
     if (shouldPlay) requestPlay();
