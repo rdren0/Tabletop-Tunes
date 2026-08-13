@@ -49,6 +49,9 @@ export default function App() {
   // Per-listener, exactly like the music volume, and deliberately quiet to
   // start — ambience is meant to sit under things.
   const [ambienceVolume, setAmbienceVolume] = useState(30);
+  // Its own mute, independent of the music's — ambience is a separate layer,
+  // so silencing one shouldn't silence the other.
+  const [ambienceMuted, setAmbienceMuted] = useState(false);
   const [ambienceInput, setAmbienceInput] = useState("");
   const [ambienceError, setAmbienceError] = useState<string | null>(null);
   const [playlistIds, setPlaylistIds] = useState<string[]>([]);
@@ -441,7 +444,11 @@ export default function App() {
       </div>
       {/* Ambience runs on its own transport: each stream's own toggle decides
           whether it sounds, independent of whatever the queue is doing. */}
-      <AmbienceStage streams={room.ambience} listenerVolume={ambienceVolume} muted={muted} />
+      <AmbienceStage
+        streams={room.ambience}
+        listenerVolume={ambienceVolume}
+        muted={ambienceMuted}
+      />
 
       {autoMuted && muted && (
         <p className="hint hint--dj">
@@ -631,14 +638,25 @@ export default function App() {
                 🌧 Ambience
               </span>
             )}
+            <button
+              type="button"
+              className="mute mute--ambience"
+              onClick={() => setAmbienceMuted((m) => !m)}
+              title={ambienceMuted ? "Unmute ambience" : "Mute ambience"}
+            >
+              {ambienceMuted || ambienceVolume === 0 ? "🔇" : "🔊"}
+            </button>
             <input
               className="ambience-listener-volume"
               type="range"
               min={0}
               max={100}
-              value={ambienceVolume}
+              value={ambienceMuted ? 0 : ambienceVolume}
               title="Ambience volume — yours only"
-              onChange={(e) => setAmbienceVolume(Number(e.target.value))}
+              onChange={(e) => {
+                setAmbienceVolume(Number(e.target.value));
+                setAmbienceMuted(false);
+              }}
             />
           </div>
 
