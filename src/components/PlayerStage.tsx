@@ -13,6 +13,8 @@ interface PlayerStageProps {
   anchorAt: number;
   /** Reports this client's playback position so controllers can re-anchor. */
   onTime?: (seconds: number) => void;
+  /** Fired when playback had to start muted because the browser blocked audio. */
+  onAutoMuted?: () => void;
   /** Video ids discovered inside a YouTube playlist, once it has loaded. */
   onPlaylistLoaded?: (videoIds: string[]) => void;
   onEnded: () => void;
@@ -32,6 +34,7 @@ export function PlayerStage({
   anchorPosition,
   anchorAt,
   onTime,
+  onAutoMuted,
   onPlaylistLoaded,
   onEnded,
 }: PlayerStageProps) {
@@ -56,6 +59,7 @@ export function PlayerStage({
         anchorPosition={anchorPosition}
         anchorAt={anchorAt}
         onTime={onTime}
+        onAutoMuted={onAutoMuted}
         onPlaylistLoaded={onPlaylistLoaded}
         onEnded={onEnded}
       />
@@ -78,6 +82,7 @@ function YouTubeStage({
   anchorPosition,
   anchorAt,
   onTime,
+  onAutoMuted,
   onPlaylistLoaded,
   onEnded,
 }: Omit<PlayerStageProps, "item"> & { item: QueueItem }) {
@@ -105,6 +110,8 @@ function YouTubeStage({
   anchorAtRef.current = anchorAt;
   const onTimeRef = useRef(onTime);
   onTimeRef.current = onTime;
+  const onAutoMutedRef = useRef(onAutoMuted);
+  onAutoMutedRef.current = onAutoMuted;
   const onPlaylistLoadedRef = useRef(onPlaylistLoaded);
   onPlaylistLoadedRef.current = onPlaylistLoaded;
   const lastPlaylistRef = useRef("");
@@ -181,13 +188,23 @@ function YouTubeStage({
         return;
       }
 
-      // The room wants playback but this client isn't playing. Retry a few
-      // times — that recovers most cases silently. If the browser is genuinely
-      // refusing (phones always do), stop and leave YouTube's own play button
-      // visible, which listeners already know how to use.
+      // The room wants playback but this client isn't playing. Retry first —
+      // that recovers the ordinary cases silently.
       if (Date.now() - readyAt.current < 3000) return;
       stalledTicks.current += 1;
-      if (stalledTicks.current <= 3) player.playVideo();
+      if (stalledTicks.current <= 2) {
+        player.playVideo();
+        return;
+      }
+      // Still refused, which is what phones always do and what an incognito
+      // window does with no media engagement history. Muted playback is
+      // permitted everywhere, so start in sync without sound and let the
+      // listener unmute with the speaker button already in the transport.
+      if (stalledTicks.current === 3) {
+        player.mute?.();
+        player.playVideo();
+        onAutoMutedRef.current?.();
+      }
 
       if (itemRef.current.link.kind === "playlist") {
         const ids = player.getPlaylist?.() ?? null;

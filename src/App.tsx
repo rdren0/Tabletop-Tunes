@@ -30,6 +30,9 @@ export default function App() {
   const [adding, setAdding] = useState(false);
   const [volume, setVolume] = useState(70);
   const [muted, setMuted] = useState(false);
+  // True when the browser refused audio and playback started muted, so the
+  // speaker button can be explained rather than just looking wrong.
+  const [autoMuted, setAutoMuted] = useState(false);
   const [showDjPanel, setShowDjPanel] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [spotifyNotice, setSpotifyNotice] = useState(false);
@@ -300,6 +303,10 @@ export default function App() {
         onTime={(seconds) => {
           positionRef.current = seconds;
         }}
+        onAutoMuted={() => {
+          setMuted(true);
+          setAutoMuted(true);
+        }}
         onPlaylistLoaded={setPlaylistIds}
         onEnded={handleEnded}
       />
@@ -330,7 +337,10 @@ export default function App() {
           <button
             type="button"
             className="mute"
-            onClick={() => setMuted((m) => !m)}
+            onClick={() => {
+              setMuted((m) => !m);
+              setAutoMuted(false);
+            }}
             disabled={spotifyActive}
             title={
               spotifyActive
@@ -364,6 +374,9 @@ export default function App() {
           </button>
         )}
       </div>
+      {autoMuted && muted && (
+        <p className="hint hint--dj">Your browser blocked audio — tap 🔇 to hear it.</p>
+      )}
       {!canControl && <p className="hint">Listening only.</p>}
       {!isGM && isDJ && <p className="hint hint--dj">You have DJ access.</p>}
 
