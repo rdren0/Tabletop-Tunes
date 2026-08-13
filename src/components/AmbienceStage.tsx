@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { loadScriptOnce } from "../lib/loadScript";
-import { mayAutoStart, registerGestureTarget, registerUnmuteTarget } from "../lib/audioGestures";
+import { hasGestured, registerGestureTarget, registerUnmuteTarget } from "../lib/audioGestures";
 import { AmbienceStream } from "../types";
 
 interface AmbienceStageProps {
@@ -22,6 +22,14 @@ interface AmbienceStageProps {
  */
 export function AmbienceStage({ streams, listenerVolume, muted }: AmbienceStageProps) {
   const active = streams.filter((stream) => stream.playing);
+  // Layers already running when this panel opened are "found", not "started",
+  // so they wait for a click. Ones switched on later began while the listener
+  // was watching, and may sound straight away.
+  const foundRunning = useRef<Set<string> | null>(null);
+  if (foundRunning.current === null) {
+    foundRunning.current = new Set(active.map((stream) => stream.id));
+  }
+
   return (
     <div className="ambience-stage" aria-hidden>
       {active.map((stream) => (
@@ -30,6 +38,7 @@ export function AmbienceStage({ streams, listenerVolume, muted }: AmbienceStageP
           stream={stream}
           listenerVolume={listenerVolume}
           muted={muted}
+          startedHere={!foundRunning.current?.has(stream.id)}
         />
       ))}
     </div>
@@ -40,10 +49,12 @@ function AmbiencePlayer({
   stream,
   listenerVolume,
   muted,
+  startedHere,
 }: {
   stream: AmbienceStream;
   listenerVolume: number;
   muted: boolean;
+  startedHere: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -57,6 +68,11 @@ function AmbiencePlayer({
   mutedRef.current = muted;
   // Only mounted while the stream is switched on, so it always wants to sound.
   const wantPlaying = useRef(true);
+
+  /** Sound only from a deliberate act — a click here, or a layer started here. */
+  function mayStart(): boolean {
+    return startedHere || hasGestured();
+  }
 
   function applyAudio() {
     const player = playerRef.current;
@@ -84,7 +100,7 @@ function AmbiencePlayer({
     }
     // Never start merely because the panel opened onto a room that already had
     // layers running; wait for a click or a change during the session.
-    if (!mayAutoStart()) return;
+    if (!mayStart()) return;
     if (!playing && !buffering) player.playVideo();
   }
 
@@ -115,7 +131,7 @@ function AmbiencePlayer({
             // to load+pause if the cue method isn't there, so the layer never
             // ends up empty.
             const player = playerRef.current;
-            const start = wantPlaying.current && mayAutoStart();
+            const start = wantPlaying.current && mayStart();
             if (player?.cueVideoById && !start) {
               player.cueVideoById(stream.videoId);
             } else {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { mayAutoStart, registerUnmuteTarget } from "../lib/audioGestures";
+import { hasGestured, registerUnmuteTarget } from "../lib/audioGestures";
 import { loadScriptOnce } from "../lib/loadScript";
 import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
 import { SPOTIFY_ENABLED } from "../config";
@@ -149,6 +149,15 @@ function YouTubeStage({
   // decision if it interrupts real playback; otherwise it's the browser
   // refusing, and mirroring that would stop the whole room.
   const playingSince = useRef(0);
+  // True once the room has *started* playback while this client was watching.
+  // Arriving to find a room already playing does not count.
+  const roomStarted = useRef(false);
+  const firstTransportRun = useRef(true);
+
+  /** Playback may only begin from a deliberate act, not from simply being here. */
+  function mayStart(): boolean {
+    return hasGestured() || roomStarted.current;
+  }
   const canControlRef = useRef(canControl);
   canControlRef.current = canControl;
   const onLocalTransportRef = useRef(onLocalTransport);
@@ -267,7 +276,7 @@ function YouTubeStage({
 
       // The room wants playback but this client isn't playing. Retry first —
       // that recovers the ordinary cases silently.
-      if (!mayAutoStart()) return;
+      if (!mayStart()) return;
       if (Date.now() - readyAt.current < 3000) return;
       stalledTicks.current += 1;
       if (stalledTicks.current <= 2) {
@@ -401,7 +410,7 @@ function YouTubeStage({
     // load*() begins playing immediately. When the room is paused — a listener
     // opening the panel before the GM has started anything — cue instead, so
     // nothing blares for a moment before the reconcile pauses it again.
-    const shouldPlay = isPlayingRef.current && mayAutoStart();
+    const shouldPlay = isPlayingRef.current && mayStart();
     lastLoadAt.current = Date.now();
     if (link.kind === "playlist") {
       if (shouldPlay || !player.cuePlaylist) {
@@ -435,8 +444,16 @@ function YouTubeStage({
   // React to play/pause toggles the GM or a DJ made for the whole room.
   useEffect(() => {
     if (!readyRef.current) return;
+    // The first run is this client mounting, not the room doing anything —
+    // finding a room mid-track must not start audio on its own.
+    if (firstTransportRun.current) {
+      firstTransportRun.current = false;
+      if (isPlaying) return;
+    }
+
     // A fresh play from the room clears any local stop.
     if (isPlaying) {
+      roomStarted.current = true;
       userPaused.current = false;
       stalledTicks.current = 0;
       requestPlay();

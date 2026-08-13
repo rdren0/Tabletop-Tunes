@@ -39,14 +39,16 @@ export function notifyGesture(): void {
 }
 
 let gestured = false;
-const pageLoadedAt = Date.now();
 
 /**
+ * Whether this listener has clicked anything in the popover yet.
+ *
  * Nothing may start playing merely because a panel opened onto a room that
- * happens to be mid-track — that lands as audio blaring out of nowhere. Sound
- * needs either a click on this client, or a change that arrived while the
- * listener was already sitting there.
+ * happens to be mid-track. Elapsed time is *not* a substitute: a client left
+ * sitting there would silently qualify and start on its own, which is exactly
+ * the unprompted audio being avoided. Callers pair this with an explicit
+ * signal that the room started something while they were watching.
  */
-export function mayAutoStart(): boolean {
-  return gestured || Date.now() - pageLoadedAt > 2500;
+export function hasGestured(): boolean {
+  return gestured;
 }
