@@ -462,11 +462,11 @@ body {
   flex-shrink: 0;
 }
 
+/* Matches the music mute exactly, just tinted to the ambience palette. */
 .mute--ambience {
-  font-size: 12px;
-  padding: 4px 6px;
   border-color: #35505a;
   background: #1c2a2f;
+  color: #cfe6ee;
 }
 
 .ambience-header-label {

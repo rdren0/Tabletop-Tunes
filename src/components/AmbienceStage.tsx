@@ -115,31 +115,36 @@ function AmbiencePlayer({
       });
       if (cancelled || !containerRef.current || !window.YT) return;
 
-      const mount = document.createElement("div");
-      containerRef.current.appendChild(mount);
+      // Build the iframe by hand rather than letting the API generate it: the
+      // `allow` attribute is only honoured at load time, so setting it later
+      // (as onReady did) never delegated autoplay permission at all — which is
+      // what kept Chrome refusing these layers.
+      const frame = document.createElement("iframe");
+      frame.allow = "autoplay; encrypted-media";
+      frame.width = "100%";
+      frame.height = "100%";
+      frame.style.border = "0";
+      const params = new URLSearchParams({
+        enablejsapi: "1",
+        playsinline: "1",
+        controls: "0",
+        // YouTube loops a single video only when it's given as a one-item list.
+        loop: "1",
+        playlist: stream.videoId,
+        origin: window.location.origin,
+      });
+      frame.src = `https://www.youtube.com/embed/${stream.videoId}?${params}`;
+      containerRef.current.appendChild(frame);
 
-      playerRef.current = new window.YT.Player(mount, {
-        width: "100%",
-        height: "100%",
-        playerVars: { playsinline: 1, controls: 0 },
+      playerRef.current = new window.YT.Player(frame, {
         events: {
           onReady: () => {
-            const frame = playerRef.current?.getIframe?.();
-            if (frame) frame.allow = "autoplay; encrypted-media";
-            // Cue rather than load: load*() starts playing on arrival, which
-            // would be exactly the unprompted audio we're avoiding. Fall back
-            // to load+pause if the cue method isn't there, so the layer never
-            // ends up empty.
+            // The iframe src already carries the video, so there's nothing to
+            // load here — just set the levels and start if we're allowed to.
             const player = playerRef.current;
-            const start = wantPlaying.current && mayStart();
-            if (player?.cueVideoById && !start) {
-              player.cueVideoById(stream.videoId);
-            } else {
-              player?.loadVideoById(stream.videoId);
-              if (!start) player?.pauseVideo();
-            }
             applyAudio();
-            if (start) player?.playVideo();
+            if (wantPlaying.current && mayStart()) player?.playVideo();
+            else player?.pauseVideo();
           },
           onStateChange: (e) => {
             // Ambience loops forever rather than advancing anything.
