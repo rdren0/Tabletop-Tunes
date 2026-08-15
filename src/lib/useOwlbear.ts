@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import OBR, { Player } from "@owlbear-rodeo/sdk";
-import { EMPTY_ROOM_STATE, ROOM_METADATA_KEY, RoomState } from "../types";
+import { maxPopoverHeight, measurePanel, popoverHeightFor } from "./popoverHeight";
+import { AdvancerCandidate, PRESENCE_TTL_MS } from "./advancer";
+import { EMPTY_ROOM_STATE, RoomState } from "../types";
+import { hasLegacyState, metadataUpdateFor, readRoomState } from "./roomMetadata";
 
 /** True once the extension is confirmed to be running inside Owlbear Rodeo. */
 export function useObrReady(): boolean {
@@ -71,64 +74,52 @@ export function useObrTheme(ready: boolean) {
   }, [ready]);
 }
 
-/** Smallest sensible popover, so a momentarily empty panel isn't a sliver. */
-const MIN_POPOVER_HEIGHT = 180;
-
 /**
- * How tall the popover may grow. Derived from the screen rather than a fixed
- * number, because a fixed ceiling turns into a scrollbar the moment the panel
- * needs more room — which is exactly the thing sizing-to-content is meant to
- * avoid. The margin leaves space for Owlbear's own chrome and the browser's.
- *
- * `screen.availHeight` is readable from inside the iframe; `window.innerHeight`
- * is not useful here, since that's the popover's current height, not the room
- * available to it.
- */
-function maxPopoverHeight(): number {
-  const screenHeight = window.screen?.availHeight;
-  if (!screenHeight) return 900;
-  return Math.max(MIN_POPOVER_HEIGHT, screenHeight - 160);
-}
-
-/**
- * Sizes the action popover to whatever the panel actually needs. The manifest
- * height is a single fixed number, which leaves a tall empty box under a short
- * queue — Owlbear lets an extension resize its own popover at runtime, so the
- * frame can follow the content instead.
+ * Sizes the action popover to whatever the panel actually needs. A manifest
+ * declares a single fixed height, which leaves a tall empty box under a short
+ * queue; Owlbear lets an extension resize its own popover at runtime instead.
  *
  * Returns a ref to attach to the root element.
  */
 export function useAutoHeight(ready: boolean) {
   const ref = useRef<HTMLDivElement>(null);
+  const lastSent = useRef(0);
+
+  const sync = useCallback(() => {
+    const element = ref.current;
+    if (!element) return;
+    const height = popoverHeightFor(measurePanel(element), maxPopoverHeight(window.screen?.availHeight));
+    // Each call is a round trip through Owlbear, and the embed's aspect-ratio
+    // box produces sub-pixel churn on every reflow.
+    if (Math.abs(height - lastSent.current) < 2) return;
+    lastSent.current = height;
+    OBR.action.setHeight(height).catch(() => {
+      // Resizing is a nicety; a refused call just leaves the manifest size.
+    });
+  }, []);
+
   useEffect(() => {
     if (!ready) return;
     const element = ref.current;
     if (!element) return;
-
-    let last = 0;
-    const observer = new ResizeObserver(() => {
-      const measured = Math.ceil(element.getBoundingClientRect().height);
-      const height = Math.min(Math.max(measured, MIN_POPOVER_HEIGHT), maxPopoverHeight());
-      // Each call is a round trip through Owlbear, and the embed's
-      // aspect-ratio box produces sub-pixel churn on every reflow.
-      if (Math.abs(height - last) < 2) return;
-      last = height;
-      OBR.action.setHeight(height).catch(() => {
-        // Resizing is a nicety; a refused call just leaves the manifest size.
-      });
-    });
+    const observer = new ResizeObserver(sync);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [ready]);
+  }, [ready, sync]);
+
+  // The panel is capped at the viewport, so its contents can change without
+  // its own size changing at all — adding a track while the queue is already
+  // scrolling, or opening the support section. A ResizeObserver sees nothing
+  // in those cases, so re-check after every render too.
+  useEffect(() => {
+    if (ready) sync();
+  });
+
   return ref;
 }
 
-export interface PartyMember {
-  id: string;
+export interface PartyMember extends AdvancerCandidate {
   name: string;
-  role: "GM" | "PLAYER";
-  /** Epoch ms this player's panel last checked in, or null if it never has. */
-  presentAt: number | null;
 }
 
 /**
@@ -141,15 +132,7 @@ export interface PartyMember {
  * so these frequent writes can't collide with anyone else's.
  */
 const PRESENCE_KEY = "rodeo.tabletoptunes/presence";
-const PRESENCE_INTERVAL_MS = 15_000;
-/** Three missed beats before a client counts as gone. */
-export const PRESENCE_TTL_MS = 50_000;
-
-/** Whether a party member's panel is open and running right now. */
-export function hasPanelOpen(member: PartyMember): boolean {
-  return member.presentAt !== null && Date.now() - member.presentAt < PRESENCE_TTL_MS;
-}
-
+const PRESENCE_INTERVAL_MS = PRESENCE_TTL_MS / 3;
 /** Publishes this client's own presence for as long as the panel is open. */
 export function usePresence(ready: boolean) {
   useEffect(() => {
@@ -196,6 +179,9 @@ export function useParty(ready: boolean): PartyMember[] {
  * Shared playback state, stored in room metadata so it's synced to every
  * connected client and persists for the room (survives reloads/reconnects).
  * Returns the current state plus a setter that merges and broadcasts updates.
+ *
+ * State is split across several metadata keys by concern — see roomMetadata.ts
+ * — so writes about different things cannot discard one another.
  */
 export function useRoomState(
   ready: boolean
@@ -204,35 +190,38 @@ export function useRoomState(
   // Track the latest state locally so rapid patches (e.g. add-to-queue then
   // immediately play) don't race against the async round-trip to room metadata.
   const latest = useRef<RoomState>(EMPTY_ROOM_STATE);
+  // Set while this room still holds the pre-split key, so the next write can
+  // migrate it wholesale rather than leaving half the state behind.
+  const needsMigration = useRef(false);
 
   useEffect(() => {
     if (!ready) return;
     let unsubscribed = false;
 
     OBR.room.getMetadata().then((metadata) => {
-      const existing = metadata[ROOM_METADATA_KEY] as Partial<RoomState> | undefined;
-      if (existing && !unsubscribed) {
-        const merged = { ...EMPTY_ROOM_STATE, ...existing };
-        latest.current = merged;
-        setState(merged);
-      }
+      if (unsubscribed) return;
+      needsMigration.current = hasLegacyState(metadata);
+      const merged = readRoomState(metadata);
+      latest.current = merged;
+      setState(merged);
     });
 
     return OBR.room.onMetadataChange((metadata) => {
-      const next = metadata[ROOM_METADATA_KEY] as Partial<RoomState> | undefined;
-      if (next) {
-        const merged = { ...EMPTY_ROOM_STATE, ...next };
-        latest.current = merged;
-        setState(merged);
-      }
+      needsMigration.current = hasLegacyState(metadata);
+      const merged = readRoomState(metadata);
+      latest.current = merged;
+      setState(merged);
     });
   }, [ready]);
 
   function patchState(patch: Partial<RoomState>) {
-    const next: RoomState = { ...latest.current, ...patch, updatedAt: Date.now() };
+    const next: RoomState = { ...latest.current, ...patch };
     latest.current = next;
     setState(next);
-    OBR.room.setMetadata({ [ROOM_METADATA_KEY]: next });
+
+    const migrating = needsMigration.current;
+    needsMigration.current = false;
+    OBR.room.setMetadata(metadataUpdateFor(next, patch, migrating));
   }
 
   return [state, patchState];

@@ -67,7 +67,6 @@ export interface RoomState {
    */
   anchorPosition: number;
   anchorAt: number; // epoch ms, from the writing client's clock
-  updatedAt: number;
 }
 
 export const EMPTY_ROOM_STATE: RoomState = {
@@ -79,7 +78,6 @@ export const EMPTY_ROOM_STATE: RoomState = {
   ambience: [],
   anchorPosition: 0,
   anchorAt: 0,
-  updatedAt: 0,
 };
 
 export const ROOM_METADATA_KEY = "rodeo.tabletoptunes/state";

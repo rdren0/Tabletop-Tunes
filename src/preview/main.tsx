@@ -39,7 +39,6 @@ const SEED: RoomState = {
   ],
   anchorPosition: 0,
   anchorAt: Date.now(),
-  updatedAt: Date.now(),
 };
 
 preview.seedRoom({ [ROOM_METADATA_KEY]: SEED });

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  hasPanelOpen,
   useIsGM,
   useAutoHeight,
   useObrReady,
@@ -11,6 +10,7 @@ import {
   usePresence,
   useRoomState,
 } from "./lib/useOwlbear";
+import { isAdvancer as electAdvancer } from "./lib/advancer";
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
 import { PlayerStage } from "./components/PlayerStage";
@@ -340,27 +340,9 @@ export default function App() {
     patchRoom({ queue: [], currentIndex: -1, isPlaying: false });
   }
 
-  /**
-   * Exactly one client drives the queue forward, otherwise every controller
-   * would skip on the same "ended" event and jump several tracks at once. The
-   * GM owns that job; if no GM is running the panel, the lowest-sorted DJ who
-   * is takes over, so the list keeps playing instead of stalling.
-   *
-   * Elected on who has the panel *open*, not who is in the room. Owlbear
-   * destroys the iframe when the popover closes, so a GM sitting in the room
-   * with the panel shut can't advance anything — and testing role alone made
-   * every DJ stand down for them, which stopped the queue dead at the end of
-   * a track.
-   */
+  /** Whether this client is the one that drives the queue forward. */
   function isAdvancer(): boolean {
-    // This client is running by definition; nothing else to check.
-    if (isGM) return true;
-    if (party.some((p) => p.role === "GM" && hasPanelOpen(p))) return false;
-    if (!playerId || !isDJ) return false;
-    const runningDjs = [playerId, ...party.filter(hasPanelOpen).map((p) => p.id)]
-      .filter((id) => room.djIds.includes(id))
-      .sort();
-    return runningDjs[0] === playerId;
+    return electAdvancer({ isGM, isDJ, playerId, djIds: room.djIds, party });
   }
 
   function handleEnded() {
