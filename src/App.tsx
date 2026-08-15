@@ -20,7 +20,14 @@ import {
   requestStatusOf,
 } from "./types";
 import { SPOTIFY_ENABLED } from "./config";
-import { loadLocalPrefs, loadPlayerPrefs, savePrefs } from "./lib/preferences";
+import {
+  AudioPrefs,
+  DEFAULT_AUDIO_PREFS,
+  loadLocalPrefs,
+  loadPlayerPrefs,
+  savePlayerPrefs,
+  savePrefs,
+} from "./lib/preferences";
 
 const SOURCE_LABEL: Record<string, string> = {
   youtube: "YouTube",
@@ -38,10 +45,16 @@ export default function App() {
   const [inputValue, setInputValue] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  // Seeded synchronously so there's no moment at default volume; the
-  // authoritative value arrives from player metadata just below.
-  const [volume, setVolume] = useState(() => loadLocalPrefs().volume);
-  const [muted, setMuted] = useState(() => loadLocalPrefs().muted);
+  // Read once, synchronously, so the panel opens at the listener's own level
+  // rather than flashing the default. Null means they've never set one, which
+  // is also what tells the effect below to fall back to Owlbear's copy.
+  const storedPrefs = useRef<AudioPrefs | null>(loadLocalPrefs());
+  const [volume, setVolume] = useState(
+    () => storedPrefs.current?.volume ?? DEFAULT_AUDIO_PREFS.volume
+  );
+  const [muted, setMuted] = useState(
+    () => storedPrefs.current?.muted ?? DEFAULT_AUDIO_PREFS.muted
+  );
   // True when the browser refused audio and playback started muted, so the
   // speaker button can be explained rather than just looking wrong.
   const [autoMuted, setAutoMuted] = useState(false);
@@ -75,17 +88,23 @@ export default function App() {
    * never chose.
    */
   const prefsTimer = useRef(0);
-  function rememberAudio(prefs: { volume: number; muted: boolean }) {
-    // Dragging the slider fires continuously, and each metadata write is a
-    // round trip through Owlbear — settle first, then store.
+  function rememberAudio(prefs: AudioPrefs) {
+    // Written now, not on a timer. Closing the popover destroys this iframe,
+    // and a pending timeout inside it never runs — deferring this is what lost
+    // the setting for anyone who adjusted the volume and closed the panel.
+    savePrefs(prefs);
+    // Only the Owlbear round trip waits, since dragging the slider fires
+    // continuously and each write goes over the wire.
     window.clearTimeout(prefsTimer.current);
-    prefsTimer.current = window.setTimeout(() => savePrefs(prefs), 300);
+    prefsTimer.current = window.setTimeout(() => savePlayerPrefs(prefs), 300);
   }
 
-  // Owlbear's per-player store is the copy that survives when the browser
-  // denies the embedded frame its own storage, so it wins once it loads.
+  // Owlbear's copy is a backstop for browsers that deny the embedded frame its
+  // own storage, so it's consulted only when localStorage held nothing. It's
+  // session state, and letting it override the durable copy would undo a
+  // setting the listener had actually chosen.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || storedPrefs.current) return;
     let cancelled = false;
     loadPlayerPrefs().then((prefs) => {
       if (cancelled || !prefs) return;

@@ -5,23 +5,20 @@ import OBR from "@owlbear-rodeo/sdk";
  * extension's iframe every time the popover is dismissed, so anything kept
  * only in React state is back to its default on the next open.
  *
- * Two stores, because neither is sufficient alone:
+ * localStorage is the durable copy and is written synchronously on every
+ * change — nothing may be deferred, because a pending timer in an iframe that
+ * Owlbear has just destroyed never runs.
  *
- * - Owlbear's own per-player metadata is authoritative. It travels through the
- *   SDK rather than browser storage, so it works even when the browser blocks
- *   or partitions storage for embedded frames — which is the case localStorage
- *   alone silently failed. It's scoped to the room, and reading it is async.
- * - localStorage seeds the initial value synchronously, so there's no moment
- *   at default volume while the metadata read resolves, and it carries the
- *   setting into rooms this player hasn't opened the panel in before.
- *
- * Writes go to both. Reads prefer the player metadata once it arrives.
+ * Owlbear's per-player metadata is a backstop for browsers that deny embedded
+ * frames their own storage. It is session state rather than durable storage,
+ * so it is only consulted when localStorage gave us nothing at all.
  */
 
 const STORAGE_KEY = "rodeo.tabletoptunes/audio";
 const METADATA_KEY = "rodeo.tabletoptunes/audio";
 
-export const DEFAULT_VOLUME = 70;
+/** Ambient music should sit under the table's conversation, not over it. */
+export const DEFAULT_VOLUME = 40;
 
 export interface AudioPrefs {
   volume: number;
@@ -41,26 +38,22 @@ function coerce(raw: unknown): AudioPrefs | null {
   };
 }
 
-export function loadLocalPrefs(): AudioPrefs {
+/**
+ * Null means this browser is holding nothing for us — either the listener has
+ * never touched the controls, or storage is unavailable. Both cases want the
+ * default, so the caller can't treat a stored 40 as "no preference".
+ */
+export function loadLocalPrefs(): AudioPrefs | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_AUDIO_PREFS;
-    return coerce(JSON.parse(raw)) ?? DEFAULT_AUDIO_PREFS;
+    if (!raw) return null;
+    return coerce(JSON.parse(raw));
   } catch {
-    // Storage unavailable or holding junk; the defaults are a fine answer.
-    return DEFAULT_AUDIO_PREFS;
+    return null;
   }
 }
 
-function saveLocalPrefs(prefs: AudioPrefs) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-  } catch {
-    // Blocked storage is exactly why the player metadata copy exists.
-  }
-}
-
-/** The copy that survives when the browser won't give the iframe storage. */
+/** Consulted only when localStorage came back empty. */
 export async function loadPlayerPrefs(): Promise<AudioPrefs | null> {
   try {
     const metadata = await OBR.player.getMetadata();
@@ -70,9 +63,20 @@ export async function loadPlayerPrefs(): Promise<AudioPrefs | null> {
   }
 }
 
+/**
+ * Writes the durable copy immediately. Only the Owlbear round trip may be
+ * deferred, and the caller owns that debounce.
+ */
 export function savePrefs(prefs: AudioPrefs) {
-  saveLocalPrefs(prefs);
-  // setMetadata rejects if the extension isn't ready yet; a dropped write here
-  // only costs this one change, and localStorage has already taken it.
-  OBR.player.setMetadata({ [METADATA_KEY]: prefs }).catch(() => {});
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    // Blocked storage is exactly why the player-metadata copy exists.
+  }
+}
+
+export function savePlayerPrefs(prefs: AudioPrefs) {
+  OBR.player.setMetadata({ [METADATA_KEY]: prefs }).catch(() => {
+    // A dropped write costs this one change; localStorage already has it.
+  });
 }
