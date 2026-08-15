@@ -48,8 +48,12 @@ export function PlayerStage({
   if (!item) {
     return (
       <div className="player-stage player-stage--empty">
+        {/* A listener can't fix an empty queue, so telling them to paste a link
+            reads as a broken instruction. Point at the GM instead. */}
         <p>
-          Queue is empty. Paste a YouTube{SPOTIFY_ENABLED ? " or Spotify" : ""} link below.
+          {canControl
+            ? `Queue is empty. Paste a YouTube${SPOTIFY_ENABLED ? " or Spotify" : ""} link below.`
+            : "Nothing queued yet — the GM hasn't started any music."}
         </p>
       </div>
     );

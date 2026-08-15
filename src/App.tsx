@@ -107,6 +107,16 @@ export default function App() {
   // Spotify's embed exposes no volume API, so the controls would silently lie.
   const spotifyActive = currentItem?.link.source === "spotify";
   const currentIsPlaylist = currentItem?.link.kind === "playlist";
+  /**
+   * What a listener should be told about the room. Silence has two very
+   * different causes — nothing loaded yet versus deliberately paused — and
+   * without saying which, a quiet panel just looks broken.
+   */
+  const listenerState: "empty" | "paused" | "playing" = !currentItem
+    ? "empty"
+    : room.isPlaying
+      ? "playing"
+      : "paused";
   const activeAmbienceCount = room.ambience.filter((s) => s.playing).length;
 
   // Long tracks drift, so the client driving the queue republishes its position
@@ -375,9 +385,14 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* Always visible: YouTube's own play button is the one control a browser
-          always honours, so it has to stay reachable. */}
-      <PlayerStage
+      {/* The embed's own play button is the one control a browser always
+          honours, so it stays reachable whenever the room is actually playing —
+          that's the case where a listener needs it to defeat autoplay blocking.
+          While the room is paused there is nothing for it to recover, and
+          pressing it only gets undone by the heartbeat a second later, so a
+          scrim covers it and says why instead of letting them fight the sync. */}
+      <div className="stage-wrap">
+        <PlayerStage
           item={currentItem}
           isPlaying={room.isPlaying}
           volume={volume}
@@ -396,32 +411,59 @@ export default function App() {
             if (!canControl) return;
             patchRoom({ isPlaying: playing, ...anchorHere() });
           }}
-        onPlaylistLoaded={setPlaylistIds}
-        onEnded={handleEnded}
-      />
+          onPlaylistLoaded={setPlaylistIds}
+          onEnded={handleEnded}
+        />
+        {!canControl && listenerState === "paused" && (
+          <div className="stage-scrim" role="status">
+            <span className="stage-scrim-icon">⏸</span>
+            <span>Paused by the GM</span>
+            <em>Playback resumes for everyone when they hit play.</em>
+          </div>
+        )}
+      </div>
 
       <div className="transport">
-        <button onClick={() => skip(-1)} disabled={!canControl || room.queue.length === 0} title="Previous">
-          ⏮
-        </button>
-        <button onClick={togglePlay} disabled={!canControl || !currentItem} title={room.isPlaying ? "Pause" : "Play"}>
-          {room.isPlaying ? "⏸" : "▶"}
-        </button>
-        <button onClick={() => skip(1)} disabled={!canControl || room.queue.length === 0} title="Next">
-          ⏭
-        </button>
-        <button
-          className={confirmClear ? "clear clear--confirm" : "clear"}
-          onClick={handleClearClick}
-          disabled={!canControl || room.queue.length === 0}
-          title={
-            confirmClear
-              ? "Click again to clear the queue for everyone"
-              : "Clear the queue and stop playback"
-          }
-        >
-          {confirmClear ? "Clear all?" : "🗑"}
-        </button>
+        {/* Transport belongs to whoever runs the room. A listener pressing these
+            could never do anything, so they get a status line instead of four
+            dead buttons — and the status says why nothing is sounding. */}
+        {canControl ? (
+          <>
+            <button onClick={() => skip(-1)} disabled={room.queue.length === 0} title="Previous">
+              ⏮
+            </button>
+            <button onClick={togglePlay} disabled={!currentItem} title={room.isPlaying ? "Pause" : "Play"}>
+              {room.isPlaying ? "⏸" : "▶"}
+            </button>
+            <button onClick={() => skip(1)} disabled={room.queue.length === 0} title="Next">
+              ⏭
+            </button>
+            <button
+              className={confirmClear ? "clear clear--confirm" : "clear"}
+              onClick={handleClearClick}
+              disabled={room.queue.length === 0}
+              title={
+                confirmClear
+                  ? "Click again to clear the queue for everyone"
+                  : "Clear the queue and stop playback"
+              }
+            >
+              {confirmClear ? "Clear all?" : "🗑"}
+            </button>
+          </>
+        ) : (
+          <span
+            className={
+              listenerState === "playing" ? "listener-status" : "listener-status listener-status--idle"
+            }
+          >
+            {listenerState === "empty"
+              ? "⏹ Waiting on the GM"
+              : listenerState === "paused"
+                ? "⏸ Paused by the GM"
+                : "♪ Now playing"}
+          </span>
+        )}
         <div className="volume">
           <button
             type="button"
@@ -471,7 +513,15 @@ export default function App() {
           Your browser blocked audio. Tap 🔇, or tap the video itself if that doesn't take.
         </p>
       )}
-      {!canControl && <p className="hint">Listening only.</p>}
+      {!canControl && (
+        <p className="hint">
+          {listenerState === "empty"
+            ? "Listening only — the GM hasn't queued anything yet."
+            : listenerState === "paused"
+              ? "Listening only — the GM has paused playback, so it'll stay quiet until they resume."
+              : "Listening only."}
+        </p>
+      )}
       {!isGM && isDJ && <p className="hint hint--dj">You have DJ access.</p>}
 
       {isGM && showDjPanel && (

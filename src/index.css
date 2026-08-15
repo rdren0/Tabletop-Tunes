@@ -30,6 +30,47 @@ body {
   color: #999;
 }
 
+/* Anchors the paused scrim over the embed. The stage sets its own aspect
+   ratio, so the wrapper takes its height from the stage rather than the
+   other way round. */
+.stage-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-scrim {
+  position: absolute;
+  inset: 0;
+  /* Above the embed's iframe, which creates its own stacking context. */
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+  background: rgba(12, 12, 16, 0.82);
+  color: #ddd;
+  font-size: 13px;
+  /* Swallow the click rather than letting it reach the embed. */
+  cursor: default;
+  user-select: none;
+}
+
+.stage-scrim-icon {
+  font-size: 22px;
+  color: #b7a4ff;
+}
+
+.stage-scrim em {
+  font-style: normal;
+  font-size: 11px;
+  color: #8a8a94;
+}
+
 .player-stage {
   width: 100%;
   min-height: 152px;
@@ -98,6 +139,19 @@ body {
   color: #ffdada;
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* Stands in for the transport buttons a listener doesn't get, so it has to
+   hold the same vertical space or the row jumps when DJ access is granted. */
+.listener-status {
+  font-size: 13px;
+  padding: 6px 0;
+  color: #b7a4ff;
+  white-space: nowrap;
+}
+
+.listener-status--idle {
+  color: #999;
 }
 
 .volume {
