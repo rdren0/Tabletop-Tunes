@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   useIsGM,
+  useAutoHeight,
   useObrReady,
   usePlayerId,
   usePlayerName,
@@ -28,6 +29,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function App() {
   const ready = useObrReady();
+  const appRef = useAutoHeight(ready);
   const isGM = useIsGM(ready);
   const playerId = usePlayerId(ready);
   const playerName = usePlayerName(ready);
@@ -396,7 +398,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app" ref={appRef}>
       {/* The embed's own play button is the one control a browser always
           honours, so it stays reachable whenever the room is actually playing —
           that's the case where a listener needs it to defeat autoplay blocking.

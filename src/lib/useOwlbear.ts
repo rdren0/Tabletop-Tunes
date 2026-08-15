@@ -47,6 +47,44 @@ export function usePlayerName(ready: boolean): string {
   return name;
 }
 
+/** Smallest sensible popover, so a momentarily empty panel isn't a sliver. */
+const MIN_POPOVER_HEIGHT = 180;
+/** Beyond this the panel stops growing and its queue scrolls instead. */
+const MAX_POPOVER_HEIGHT = 900;
+
+/**
+ * Sizes the action popover to whatever the panel actually needs. The manifest
+ * height is a single fixed number, which leaves a tall empty box under a short
+ * queue — Owlbear lets an extension resize its own popover at runtime, so the
+ * frame can follow the content instead.
+ *
+ * Returns a ref to attach to the root element.
+ */
+export function useAutoHeight(ready: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const element = ref.current;
+    if (!element) return;
+
+    let last = 0;
+    const observer = new ResizeObserver(() => {
+      const measured = Math.ceil(element.getBoundingClientRect().height);
+      const height = Math.min(Math.max(measured, MIN_POPOVER_HEIGHT), MAX_POPOVER_HEIGHT);
+      // Each call is a round trip through Owlbear, and the embed's
+      // aspect-ratio box produces sub-pixel churn on every reflow.
+      if (Math.abs(height - last) < 2) return;
+      last = height;
+      OBR.action.setHeight(height).catch(() => {
+        // Resizing is a nicety; a refused call just leaves the manifest size.
+      });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ready]);
+  return ref;
+}
+
 export interface PartyMember {
   id: string;
   name: string;
