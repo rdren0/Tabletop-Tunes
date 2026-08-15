@@ -29,8 +29,6 @@ declare global {
         CUED: number;
       };
     };
-
-    onSpotifyIframeApiReady?: (IFrameAPI: SpotifyIFrameAPI) => void;
   }
 
   interface YTPlayer {
@@ -50,27 +48,10 @@ declare global {
     getPlaylistIndex?(): number;
     playVideoAt?(index: number): void;
     setVolume?(volume: number): void;
+    getVolume?(): number;
     mute?(): void;
     unMute?(): void;
+    isMuted?(): boolean;
     destroy(): void;
-  }
-
-  interface SpotifyEmbedController {
-    loadUri(uri: string): void;
-    play(): void;
-    pause(): void;
-    addListener(
-      event: "playback_update",
-      cb: (e: { data: { isPaused: boolean; position: number; duration: number } }) => void
-    ): void;
-    destroy(): void;
-  }
-
-  interface SpotifyIFrameAPI {
-    createController(
-      element: HTMLElement,
-      options: { uri: string; width?: string | number; height?: string | number },
-      callback: (controller: SpotifyEmbedController) => void
-    ): void;
   }
 }

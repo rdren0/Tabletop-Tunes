@@ -1,5 +1,87 @@
+/*
+ * Two complete palettes, switched by the `data-theme` attribute that
+ * `useObrTheme` mirrors from Owlbear. Every colour below is a token — nothing
+ * hardcodes a light or dark value — so the panel follows the app around it.
+ *
+ * Contrast: every text token clears WCAG AA (4.5:1) against every surface it
+ * is actually painted on, in both palettes.
+ */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #1e1e24;
+  --surface: #26262e;
+  --surface-2: #2a2a33;
+  --surface-3: #33333e;
+  --border: #3a3a45;
+  --border-strong: #4d4d5a;
+
+  --text: #f2f2f5;
+  --text-dim: #c2c2cc;
+  --text-faint: #a0a0ac;
+
+  /* `accent` is a filled background and always pairs with `accent-text`;
+     `accent-fg` is the same idea as text drawn straight onto a surface. */
+  --accent: #6741d9;
+  --accent-hover: #7c5cfc;
+  --accent-text: #ffffff;
+  --accent-fg: #c3b0ff;
+
+  --ok-fg: #7fd18f;
+  --ok-border: #3f6b48;
+
+  --danger-fg: #ff9a9a;
+  --danger-bg: #5a2626;
+  --danger-text: #ffdada;
+
+  --notice-bg: #33301f;
+  --notice-border: #4a4436;
+  --notice-text: #f0e2b6;
+
+  --active: #33324a;
+  --overlay-bg: #17171d;
+  --overlay-border: #2f2f3a;
+  --rule: #4a4560;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --surface: #f1f1f5;
+  --surface-2: #e9e9ef;
+  --surface-3: #e0e0e8;
+  --border: #c9c9d2;
+  --border-strong: #a8a8b6;
+
+  --text: #1a1a1f;
+  --text-dim: #45454f;
+  --text-faint: #5a5a66;
+
+  --accent: #5f3dc4;
+  --accent-hover: #6741d9;
+  --accent-text: #ffffff;
+  --accent-fg: #5f3dc4;
+
+  --ok-fg: #186b2e;
+  --ok-border: #7dbf8e;
+
+  --danger-fg: #b3261e;
+  --danger-bg: #fbe9e7;
+  --danger-text: #8c1d18;
+
+  --notice-bg: #fdf6e3;
+  --notice-border: #e0d3a8;
+  --notice-text: #6b5a1f;
+
+  --active: #e6e2fb;
+  --overlay-bg: #f1f1f5;
+  --overlay-border: #c9c9d2;
+  --rule: #c0b8dd;
+}
+
 :root {
-  color-scheme: light dark;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -9,8 +91,8 @@
 
 body {
   margin: 0;
-  background: #1e1e24;
-  color: #f2f2f5;
+  background: var(--bg);
+  color: var(--text);
 }
 
 /* Deliberately no fixed height: the panel is measured and the popover is
@@ -30,10 +112,10 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 120px;
-  color: #999;
+  color: var(--text-faint);
 }
 
-/* Anchors the paused scrim over the embed. The stage sets its own aspect
+/* Anchors the paused notice over the embed. The stage sets its own aspect
    ratio, so the wrapper takes its height from the stage rather than the
    other way round. */
 .stage-wrap {
@@ -63,9 +145,9 @@ body {
   border-radius: 8px;
   padding: 12px;
   text-align: center;
-  background: #17171d;
-  border: 1px solid #2f2f3a;
-  color: #ddd;
+  background: var(--overlay-bg);
+  border: 1px solid var(--overlay-border);
+  color: var(--text);
   font-size: 13px;
   cursor: default;
   user-select: none;
@@ -73,15 +155,17 @@ body {
 
 .stage-notice-icon {
   font-size: 22px;
-  color: #b7a4ff;
+  color: var(--accent-fg);
 }
 
 .stage-notice em {
   font-style: normal;
-  font-size: 11px;
-  color: #8a8a94;
+  font-size: 12px;
+  color: var(--text-faint);
 }
 
+/* The video frame stays black in both themes — it's the letterbox around
+   someone else's content, not part of this panel's surface. */
 .player-stage {
   width: 100%;
   min-height: 152px;
@@ -90,7 +174,7 @@ body {
   background: #000;
 }
 
-/* YouTube gets a real 16:9 video frame instead of the Spotify-sized strip. */
+/* A real 16:9 video frame rather than the 152px minimum below. */
 .player-stage--youtube {
   aspect-ratio: 16 / 9;
   min-height: 0;
@@ -111,7 +195,9 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  color: #888;
+  /* Sits on the black stage rather than the panel, so it takes a fixed light
+     colour instead of a theme token. */
+  color: #b6b6be;
   text-align: center;
   font-size: 13px;
 }
@@ -128,8 +214,8 @@ body {
   font-size: 16px;
   padding: 6px 10px;
   border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a33;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
   color: inherit;
   cursor: pointer;
 }
@@ -140,14 +226,14 @@ body {
 }
 
 .transport button.clear:not(:disabled):hover {
-  border-color: #ff8080;
-  color: #ff8080;
+  border-color: var(--danger-fg);
+  color: var(--danger-fg);
 }
 
 .transport button.clear--confirm {
-  border-color: #ff8080;
-  background: #5a2626;
-  color: #ffdada;
+  border-color: var(--danger-fg);
+  background: var(--danger-bg);
+  color: var(--danger-text);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -157,12 +243,12 @@ body {
 .listener-status {
   font-size: 13px;
   padding: 6px 0;
-  color: #b7a4ff;
+  color: var(--accent-fg);
   white-space: nowrap;
 }
 
 .listener-status--idle {
-  color: #999;
+  color: var(--text-dim);
 }
 
 .volume {
@@ -179,33 +265,34 @@ body {
 .volume input {
   flex: 1;
   min-width: 0;
+  accent-color: var(--accent);
 }
 
 .hint {
   font-size: 12px;
-  color: #999;
+  color: var(--text-dim);
   margin: -4px 0 0;
 }
 
 .hint--dj {
-  color: #b7a4ff;
+  color: var(--accent-fg);
 }
 
 .dj-toggle {
   font-size: 15px;
   padding: 6px 8px;
   border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a33;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
   color: inherit;
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .dj-toggle--open {
-  border-color: #7c5cfc;
-  background: #7c5cfc;
-  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 .mute {
@@ -213,8 +300,8 @@ body {
   line-height: 1;
   padding: 6px 7px;
   border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a33;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
   color: inherit;
   cursor: pointer;
   flex-shrink: 0;
@@ -227,17 +314,17 @@ body {
 }
 
 .dj-panel {
-  border: 1px solid #3a3a45;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
-  background: #26262e;
+  background: var(--surface);
 }
 
 .dj-panel-title {
   margin: 0 0 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #ccc;
+  color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -245,7 +332,7 @@ body {
 .dj-panel-empty {
   margin: 0;
   font-size: 12px;
-  color: #888;
+  color: var(--text-faint);
 }
 
 .dj-list {
@@ -265,19 +352,19 @@ body {
 }
 
 .dj-grant {
-  font-size: 11px;
+  font-size: 12px;
   padding: 4px 8px;
   border-radius: 5px;
-  border: 1px solid #555;
-  background: #33333e;
-  color: #ddd;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text);
   cursor: pointer;
 }
 
 .dj-grant--active {
-  border-color: #7c5cfc;
-  background: #7c5cfc;
-  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 .add-row {
@@ -289,17 +376,21 @@ body {
   flex: 1;
   padding: 8px;
   border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a33;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
   color: inherit;
+}
+
+.add-row input::placeholder {
+  color: var(--text-faint);
 }
 
 .add-row button {
   padding: 8px 12px;
   border-radius: 6px;
-  border: 1px solid #7c5cfc;
-  background: #7c5cfc;
-  color: #fff;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
   cursor: pointer;
 }
 
@@ -309,7 +400,7 @@ body {
 }
 
 .error {
-  color: #ff8080;
+  color: var(--danger-fg);
   font-size: 12px;
   margin: -4px 0 0;
 }
@@ -321,9 +412,9 @@ body {
   margin-top: -4px;
   padding: 8px 10px;
   border-radius: 6px;
-  border: 1px solid #4a4436;
-  background: #33301f;
-  color: #f0e2b6;
+  border: 1px solid var(--notice-border);
+  background: var(--notice-bg);
+  color: var(--notice-text);
   font-size: 12px;
   line-height: 1.35;
 }
@@ -362,28 +453,105 @@ body {
 }
 
 .queue-item--active {
-  background: #33324a;
+  background: var(--active);
 }
 
-.badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 5px;
-  border-radius: 4px;
-  background: #444;
-  color: #ccc;
+/* Fixed-width slot on every row, occupied only on the current one. */
+.now-playing {
+  width: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 11px;
+}
+
+.eq i {
+  width: 2px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--text-faint);
+}
+
+/* Bars only move while audio is actually running, so the icon distinguishes
+   "this is the current track" from "this track is playing right now". */
+.eq--playing i {
+  background: var(--accent-fg);
+  animation: eq-bounce 0.9s ease-in-out infinite;
+}
+
+.eq--playing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.eq--playing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes eq-bounce {
+  0%,
+  100% {
+    height: 3px;
+  }
+  50% {
+    height: 11px;
+  }
+}
+
+/* Motion is decoration here — the colour already carries the meaning. */
+@media (prefers-reduced-motion: reduce) {
+  .eq--playing i {
+    animation: none;
+    height: 8px;
+  }
+}
+
+/* Touch and keyboard reordering. Targets are 28px so they're usable on a
+   phone, where the drag handle does nothing at all. */
+.reorder {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
 }
 
-/* Each service's own brand colour, with white text for contrast. */
-.badge--youtube {
-  background: #ff0000;
-  color: #fff;
+.reorder button {
+  width: 28px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.badge--spotify {
-  background: #1db954;
-  color: #08120b;
+.reorder button:first-child {
+  border-radius: 4px 4px 0 0;
+  border-bottom: 0;
+}
+
+.reorder button:last-child {
+  border-radius: 0 0 4px 4px;
+}
+
+.reorder button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.reorder button:not(:disabled):hover {
+  color: var(--text);
+  background: var(--surface-3);
 }
 
 .queue-title {
@@ -407,7 +575,7 @@ body {
 .remove {
   background: none;
   border: none;
-  color: #888;
+  color: var(--text-faint);
   cursor: pointer;
   padding: 4px;
   flex-shrink: 0;
@@ -418,33 +586,84 @@ body {
 }
 
 .drag-handle {
-  color: #666;
+  color: var(--text-faint);
   cursor: grab;
   font-size: 13px;
   line-height: 1;
   flex-shrink: 0;
   user-select: none;
+  padding: 4px 2px;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  color: var(--text);
+}
+
+/* A grab handle on a touchscreen advertises something that cannot happen —
+   drag-and-drop never fires there. Keyed on the pointer rather than the
+   viewport, so a narrow window on a desktop keeps its handle and a tablet
+   loses it. The ▲/▼ buttons stay in both cases. */
+@media (pointer: coarse) {
+  .drag-handle {
+    display: none;
+  }
 }
 
 .queue-item--dragging {
   opacity: 0.45;
 }
 
+/* Shows where the row would land, since the list gives no other clue. */
+.queue-item--over {
+  box-shadow: inset 0 2px 0 var(--accent-fg);
+}
+
 .expand {
   background: none;
-  border: 1px solid #444;
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
-  color: #bbb;
+  color: var(--text-dim);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   padding: 2px 5px;
   flex-shrink: 0;
 }
 
 .playlist-contents {
-  border-left: 2px solid #4a4560;
+  border-left: 2px solid var(--rule);
   margin: 0 0 4px 18px;
   padding-left: 8px;
+}
+
+/* Shared by the queue's own label and the expanded-playlist label, so the two
+   nested lists read as the same kind of thing. Matches .dj-panel-title. */
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -2px 0 -2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.playlist-contents .section-heading {
+  margin: 0 0 4px;
+}
+
+.section-count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .playlist-contents ol {
@@ -457,7 +676,7 @@ body {
 
 .playlist-contents li {
   font-size: 12px;
-  color: #b9b9c4;
+  color: var(--text-dim);
 }
 
 .playlist-contents a {
@@ -469,228 +688,11 @@ body {
   text-decoration: underline;
 }
 
-/* Ambience players are audio-only, but parking them at 1px rather than
-   display:none keeps browsers willing to play them. They grow into real,
-   clickable embeds only when a browser refuses to start them. */
-.ambience-stage {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* Only takes up room once a peephole is actually showing. */
-.ambience-stage:has(.ambience-player--peephole) {
-  padding: 8px 10px 0;
-}
-
-.ambience-player {
-  display: inline-block;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0.01;
-  pointer-events: none;
-  vertical-align: middle;
-}
-
-.ambience-player-frame {
-  width: 100%;
-  height: 100%;
-}
-
-/* A window onto the centre of the embed, where YouTube's play button always
-   sits. Looks like a small play button; the click is a real one on the iframe,
-   which is the only kind a browser accepts. */
-.amb-slot {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.amb-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid #4a4a58;
-  border-top-color: #b7a4ff;
-  border-radius: 50%;
-  animation: amb-spin 0.7s linear infinite;
-}
-
-@keyframes amb-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Sized to sit in the row like the transport button it replaces. */
-.ambience-player--peephole {
-  display: inline-block;
-  position: relative;
-  width: 40px;
-  height: 30px;
-  opacity: 1;
-  pointer-events: auto;
-  overflow: hidden;
-  border: 1px solid #35505a;
-  border-radius: 6px;
-  background: #000;
-}
-
-.ambience-player--peephole .ambience-player-frame {
-  position: static;
-}
-
-/* Scaled down so YouTube's centre play button fits the little window. */
-.ambience-player--peephole iframe {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(0.5);
-  width: 320px;
-  height: 180px;
-}
-
-/* Its own section, visually separate from the queue above it. */
-.ambience-panel {
-  flex-shrink: 0;
-  border: 1px solid #35505a;
-  border-radius: 8px;
-  background: #1c2a2f;
-  overflow: hidden;
-}
-
-.ambience-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-right: 10px;
-  background: #22343a;
-}
-
-.ambience-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 0;
-  background: none;
-  color: #cfe6ee;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.ambience-header-label--static {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 10px;
-  color: #cfe6ee;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.ambience-listener-volume {
-  width: 90px;
-  flex-shrink: 0;
-}
-
-/* Matches the music mute exactly, just tinted to the ambience palette. */
-.mute--ambience {
-  border-color: #35505a;
-  background: #1c2a2f;
-  color: #cfe6ee;
-}
-
-.ambience-header-label {
-  flex: 1;
-  text-align: left;
-}
-
-.ambience-header-meta {
-  font-weight: 400;
-  font-style: normal;
-  text-transform: none;
-  letter-spacing: 0;
-  color: #7fb3c4;
-}
-
-.ambience-header-caret {
-  color: #7fb3c4;
-}
-
-.ambience-body {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ambience-blurb {
-  margin: 0;
-  font-size: 12px;
-  color: #86a5b0;
-}
-
-.ambience-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.ambience-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ambience-volume {
-  width: 70px;
-  flex-shrink: 0;
-}
-
-.amb-toggle {
-  font-size: 11px;
-  padding: 3px 6px;
-  border-radius: 5px;
-  border: 1px solid #555;
-  background: #33333e;
-  color: #ddd;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.amb-toggle--on {
-  border-color: #7c5cfc;
-  background: #7c5cfc;
-  color: #fff;
-}
-
-.amb-toggle:disabled,
-.ambience-volume:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.add-row--ambience {
-  margin-top: 8px;
-}
-
 .requests {
-  border: 1px solid #3a3a45;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
-  background: #26262e;
+  background: var(--surface);
 }
 
 .request-item {
@@ -708,8 +710,8 @@ body {
 }
 
 .request-title em {
-  color: #999;
-  font-size: 11px;
+  color: var(--text-dim);
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -738,28 +740,28 @@ body {
   font-size: 12px;
   padding: 5px 8px;
   border-radius: 6px;
-  border: 1px solid #3a3a45;
-  background: #26262e;
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .my-request-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #ccc;
+  color: var(--text-dim);
 }
 
 .my-request-status {
   flex-shrink: 0;
-  color: #999;
+  color: var(--text-dim);
 }
 
 .my-request--approved {
-  border-color: #3f6b48;
+  border-color: var(--ok-border);
 }
 
 .my-request--approved .my-request-status {
-  color: #7fd18f;
+  color: var(--ok-fg);
 }
 
 .my-request--declined {
@@ -767,15 +769,52 @@ body {
 }
 
 .my-request--declined .my-request-status {
-  color: #d68a8a;
+  color: var(--danger-fg);
 }
 
 .my-request--pending .my-request-status {
-  color: #b7a4ff;
+  color: var(--accent-fg);
+}
+
+/* Sits under everything as a quiet footer; it should never compete with the
+   controls, but it has to be reachable from any state the panel is in. */
+.support {
+  margin: 2px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* A plain text button: it has to read as the quiet footer line it replaced,
+   while still being obviously pressable. */
+.support-toggle {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+
+.support-toggle:hover {
+  color: var(--text-dim);
+}
+
+.support-details {
+  margin: 4px 0 0;
+}
+
+.support a {
+  color: var(--accent-fg);
 }
 
 .queue-empty {
-  color: #777;
+  color: var(--text-faint);
   font-size: 13px;
   text-align: center;
   padding: 12px;

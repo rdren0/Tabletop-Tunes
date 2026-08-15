@@ -3,24 +3,17 @@ import { ParsedLink } from "./parseLink";
 const FALLBACKS: Record<string, string> = {
   "youtube:video": "YouTube video",
   "youtube:playlist": "YouTube playlist",
-  "spotify:track": "Spotify track",
-  "spotify:playlist": "Spotify playlist",
-  "spotify:album": "Spotify album",
-  "spotify:artist": "Spotify artist",
 };
 
 /**
- * Looks up a human-readable title via each platform's public oEmbed endpoint.
+ * Looks up a human-readable title via YouTube's public oEmbed endpoint.
  * Best-effort only: on any failure (network, CORS, timeout) falls back to a
  * generic label rather than blocking the user from adding the item.
  */
 export async function fetchTitle(url: string, link: ParsedLink): Promise<string> {
   const fallback = FALLBACKS[`${link.source}:${link.kind}`] ?? "Untitled";
   try {
-    const oembedUrl =
-      link.source === "youtube"
-        ? `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
-        : `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 4000);

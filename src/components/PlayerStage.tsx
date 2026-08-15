@@ -2,13 +2,12 @@ import { useEffect, useRef } from "react";
 import { hasGestured, registerUnmuteTarget } from "../lib/audioGestures";
 import { loadScriptOnce } from "../lib/loadScript";
 import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
-import { SPOTIFY_ENABLED } from "../config";
 
 interface PlayerStageProps {
   item: QueueItem | null;
   isPlaying: boolean;
-  volume: number; // 0-100, YouTube only; Spotify embeds don't expose volume control
-  muted: boolean; // likewise YouTube only
+  volume: number; // 0-100
+  muted: boolean;
   /** Shared playback position: where the room was at `anchorAt`. */
   anchorPosition: number;
   anchorAt: number;
@@ -16,6 +15,12 @@ interface PlayerStageProps {
   onTime?: (seconds: number) => void;
   /** Fired when playback had to start muted because the browser blocked audio. */
   onAutoMuted?: () => void;
+  /**
+   * The embed carries its own volume and mute controls, and a listener may
+   * reach for those instead of ours. Reports what the player is actually doing
+   * so the panel can follow it rather than contradict it.
+   */
+  onAudioChange?: (audio: { volume: number; muted: boolean }) => void;
   /** Whether this client may write playback state for the whole room. */
   canControl?: boolean;
   /** A GM/DJ used the player's own controls; mirror it into room state. */
@@ -40,6 +45,7 @@ export function PlayerStage({
   anchorAt,
   onTime,
   onAutoMuted,
+  onAudioChange,
   canControl,
   onLocalTransport,
   onPlaylistLoaded,
@@ -52,34 +58,31 @@ export function PlayerStage({
             reads as a broken instruction. Point at the GM instead. */}
         <p>
           {canControl
-            ? `Queue is empty. Paste a YouTube${SPOTIFY_ENABLED ? " or Spotify" : ""} link below.`
+            ? "Queue is empty. Paste a YouTube link below."
             : "Nothing queued yet — the GM hasn't started any music."}
         </p>
       </div>
     );
   }
 
-  if (item.link.source === "youtube") {
-    return (
-      <YouTubeStage
-        key="youtube-stage"
-        item={item}
-        isPlaying={isPlaying}
-        volume={volume}
-        muted={muted}
-        anchorPosition={anchorPosition}
-        anchorAt={anchorAt}
-        onTime={onTime}
-        onAutoMuted={onAutoMuted}
-        canControl={canControl}
-        onLocalTransport={onLocalTransport}
-        onPlaylistLoaded={onPlaylistLoaded}
-        onEnded={onEnded}
-      />
-    );
-  }
-
-  return <SpotifyStage key="spotify-stage" item={item} isPlaying={isPlaying} onEnded={onEnded} />;
+  return (
+    <YouTubeStage
+      key="youtube-stage"
+      item={item}
+      isPlaying={isPlaying}
+      volume={volume}
+      muted={muted}
+      anchorPosition={anchorPosition}
+      anchorAt={anchorAt}
+      onTime={onTime}
+      onAutoMuted={onAutoMuted}
+      onAudioChange={onAudioChange}
+      canControl={canControl}
+      onLocalTransport={onLocalTransport}
+      onPlaylistLoaded={onPlaylistLoaded}
+      onEnded={onEnded}
+    />
+  );
 }
 
 /** Identifies the underlying media, so re-renders only reload on a real change. */
@@ -96,6 +99,7 @@ function YouTubeStage({
   anchorAt,
   onTime,
   onAutoMuted,
+  onAudioChange,
   canControl,
   onLocalTransport,
   onPlaylistLoaded,
@@ -128,6 +132,8 @@ function YouTubeStage({
   onTimeRef.current = onTime;
   const onAutoMutedRef = useRef(onAutoMuted);
   onAutoMutedRef.current = onAutoMuted;
+  const onAudioChangeRef = useRef(onAudioChange);
+  onAudioChangeRef.current = onAudioChange;
   const onPlaylistLoadedRef = useRef(onPlaylistLoaded);
   onPlaylistLoadedRef.current = onPlaylistLoaded;
   const lastPlaylistRef = useRef("");
@@ -247,6 +253,25 @@ function YouTubeStage({
 
       onTimeRef.current?.(player.getCurrentTime?.() ?? 0);
       if (isPlayingRef.current) syncToAnchor();
+
+      // The embed's own speaker control writes straight to the player, where
+      // nothing here would ever see it — leaving our slider and icon
+      // describing a state the player isn't in, until the next change from
+      // this side silently overrode the listener's. Read it back instead.
+      // Deliberately above the early returns below, so it keeps working while
+      // the room is paused.
+      const livedVolume = player.getVolume?.();
+      const livedMuted = player.isMuted?.();
+      if (typeof livedVolume === "number" && typeof livedMuted === "boolean") {
+        // A rounding difference isn't someone moving a slider.
+        const volumeMoved = Math.abs(livedVolume - volumeRef.current) >= 1;
+        if (volumeMoved || livedMuted !== mutedRef.current) {
+          onAudioChangeRef.current?.({
+            volume: Math.round(livedVolume),
+            muted: livedMuted,
+          });
+        }
+      }
 
       // Keep watching rather than checking once after a play request: phones
       // block autoplay outright, and a client that was already sitting on the
@@ -473,77 +498,4 @@ function YouTubeStage({
       <div className="player-mount" ref={containerRef} />
     </div>
   );
-}
-
-function SpotifyStage({
-  item,
-  isPlaying,
-  onEnded,
-}: Omit<
-  PlayerStageProps,
-  "volume" | "muted" | "item" | "anchorPosition" | "anchorAt" | "onTime" | "onPlaylistLoaded"
-> & { item: QueueItem }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const controllerRef = useRef<SpotifyEmbedController | null>(null);
-  const readyRef = useRef(false);
-  const onEndedRef = useRef(onEnded);
-  onEndedRef.current = onEnded;
-  const lastNearEndRef = useRef(false);
-
-  const uri = `spotify:${item.link.kind}:${item.link.mediaId}`;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function init() {
-      await loadScriptOnce("https://open.spotify.com/embed/iframe-api/v1");
-      const IFrameAPI = await new Promise<SpotifyIFrameAPI>((resolve) => {
-        window.onSpotifyIframeApiReady = (api) => resolve(api);
-      });
-      if (cancelled || !containerRef.current) return;
-
-      // Same story as YouTube: Spotify swaps out the element it's handed, so
-      // it gets a detached node instead of one React is tracking.
-      const mount = document.createElement("div");
-      containerRef.current.appendChild(mount);
-
-      IFrameAPI.createController(mount, { uri, width: "100%", height: 152 }, (controller) => {
-        if (cancelled) return;
-        controllerRef.current = controller;
-        readyRef.current = true;
-        controller.addListener("playback_update", (e) => {
-          const { isPaused, position, duration } = e.data;
-          const nearEnd = duration > 0 && duration - position < 750;
-          if (isPaused && nearEnd && !lastNearEndRef.current) {
-            onEndedRef.current();
-          }
-          lastNearEndRef.current = nearEnd;
-        });
-        if (isPlaying) controller.play();
-      });
-    }
-
-    init();
-    return () => {
-      cancelled = true;
-      try {
-        controllerRef.current?.destroy();
-      } catch {
-        // Controller already torn down; safe to ignore.
-      }
-      controllerRef.current = null;
-      readyRef.current = false;
-      lastNearEndRef.current = false;
-      containerRef.current?.replaceChildren();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uri]);
-
-  useEffect(() => {
-    if (!readyRef.current) return;
-    if (isPlaying) controllerRef.current?.play();
-    else controllerRef.current?.pause();
-  }, [isPlaying]);
-
-  return <div className="player-stage" ref={containerRef} />;
 }

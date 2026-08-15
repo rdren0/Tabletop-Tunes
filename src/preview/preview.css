@@ -1,0 +1,57 @@
+/*
+ * Chrome for the local harness only. Never shipped — the production build
+ * entry is index.html, which doesn't import any of this.
+ *
+ * Colours here are fixed on purpose: the toolbar must stay readable while the
+ * panel inside it switches themes, so it can't share the panel's tokens.
+ */
+.harness {
+  min-height: 100vh;
+  background: #2b2b31;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.harness-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  color: #e8e8ee;
+  font-size: 13px;
+}
+
+.harness-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.harness-bar select {
+  font: inherit;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid #55555f;
+  background: #3a3a42;
+  color: #e8e8ee;
+}
+
+.harness-note {
+  color: #a6a6b2;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Matches the manifest's popover width so line wrapping is truthful. */
+.harness-frame {
+  width: 380px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  /* The panel paints its own themed background; this just clips it. */
+  background: var(--bg);
+}

@@ -3,6 +3,7 @@ import {
   useIsGM,
   useAutoHeight,
   useObrReady,
+  useObrTheme,
   usePlayerId,
   usePlayerName,
   useParty,
@@ -19,7 +20,6 @@ import {
   pruneRequests,
   requestStatusOf,
 } from "./types";
-import { SPOTIFY_ENABLED } from "./config";
 import {
   AudioPrefs,
   DEFAULT_AUDIO_PREFS,
@@ -29,14 +29,16 @@ import {
   savePrefs,
 } from "./lib/preferences";
 
-const SOURCE_LABEL: Record<string, string> = {
-  youtube: "YouTube",
-  spotify: "Spotify",
-};
+/** Where questions, bugs and requests go. Mirrored in the manifest's homepage_url. */
+const ISSUES_URL = "https://github.com/rdren0/Tabletop-Tunes/issues";
+/** The fallback channel: opening a GitHub issue requires an account, and most
+ *  people at a table won't have one. */
+const SUPPORT_EMAIL = "rdrennan0@gmail.com";
 
 export default function App() {
   const ready = useObrReady();
   const appRef = useAutoHeight(ready);
+  useObrTheme(ready);
   const isGM = useIsGM(ready);
   const playerId = usePlayerId(ready);
   const playerName = usePlayerName(ready);
@@ -62,11 +64,14 @@ export default function App() {
   // but still collapsible once they've had a look.
   const [showDjPanel, setShowDjPanel] = useState(true);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [spotifyNotice, setSpotifyNotice] = useState(false);
-  // Warn once per popover session, so it lands the first time it matters
-  // without nagging on every Spotify link that follows.
-  const spotifyWarned = useRef(false);
+  // Collapsed by default: support is worth having permanently reachable, but
+  // it costs vertical space in a popover that sizes itself to its contents.
+  const [showSupport, setShowSupport] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // The row is only draggable while the handle is held, so a press anywhere
+  // else still selects text or works the buttons.
+  const [dragArmed, setDragArmed] = useState(false);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [playlistIds, setPlaylistIds] = useState<string[]>([]);
   const [playlistTitles, setPlaylistTitles] = useState<Record<string, string>>({});
@@ -135,8 +140,6 @@ export default function App() {
   const isDJ = !!playerId && room.djIds.includes(playerId);
   const canControl = isGM || isDJ;
   const currentItem = room.currentIndex >= 0 ? room.queue[room.currentIndex] ?? null : null;
-  // Spotify's embed exposes no volume API, so the controls would silently lie.
-  const spotifyActive = currentItem?.link.source === "spotify";
   const currentIsPlaylist = currentItem?.link.kind === "playlist";
   /**
    * What a listener should be told about the room. Silence has two very
@@ -218,15 +221,7 @@ export default function App() {
     if (!canControl) return;
     const link = parseLink(inputValue);
     if (!link) {
-      setAddError(
-        SPOTIFY_ENABLED
-          ? "Unrecognized link. Use a YouTube video/playlist, or a Spotify track, album, playlist, or artist."
-          : "That isn't a YouTube video or playlist link."
-      );
-      return;
-    }
-    if (!SPOTIFY_ENABLED && link.source === "spotify") {
-      setAddError("Spotify is switched off for now — paste a YouTube link instead.");
+      setAddError("That isn't a YouTube video or playlist link.");
       return;
     }
     setAddError(null);
@@ -246,10 +241,6 @@ export default function App() {
       isPlaying: isFirstItem ? true : room.isPlaying,
       ...(isFirstItem ? restartAnchor() : {}),
     });
-    if (link.source === "spotify" && !spotifyWarned.current) {
-      spotifyWarned.current = true;
-      setSpotifyNotice(true);
-    }
     setInputValue("");
     setAdding(false);
   }
@@ -281,6 +272,23 @@ export default function App() {
     const next = (room.currentIndex + delta + room.queue.length) % room.queue.length;
     setShowPlaylist(false);
     patchRoom({ currentIndex: next, isPlaying: true, ...restartAnchor() });
+  }
+
+  // A press on the handle that never becomes a drag would otherwise leave the
+  // row armed, and a permanently-draggable row lets the title button start
+  // drags again — the exact thing arming was meant to prevent.
+  useEffect(() => {
+    if (!dragArmed) return;
+    const clear = () => setDragArmed(false);
+    window.addEventListener("pointerup", clear);
+    return () => window.removeEventListener("pointerup", clear);
+  }, [dragArmed]);
+
+  /** Clears every scrap of drag state, however the drag finished. */
+  function endDrag() {
+    setDragIndex(null);
+    setOverIndex(null);
+    setDragArmed(false);
   }
 
   /** Drag-and-drop reordering; the playing track keeps playing wherever it lands. */
@@ -352,11 +360,7 @@ export default function App() {
   async function handleRequest() {
     const link = parseLink(inputValue);
     if (!link) {
-      setAddError("That isn't a link this extension can play.");
-      return;
-    }
-    if (!SPOTIFY_ENABLED && link.source === "spotify") {
-      setAddError("Spotify is switched off for now — request a YouTube link instead.");
+      setAddError("That isn't a YouTube video or playlist link.");
       return;
     }
     setAddError(null);
@@ -439,6 +443,16 @@ export default function App() {
             setMuted(true);
             setAutoMuted(true);
           }}
+          onAudioChange={({ volume: next, muted: nextMuted }) => {
+            setVolume(next);
+            setMuted(nextMuted);
+            // Reaching into the embed's own speaker is the same act as using
+            // ours, so it's remembered the same way.
+            rememberAudio({ volume: next, muted: nextMuted });
+            // Unmuting there also answers the "your browser blocked audio"
+            // prompt, which would otherwise keep nagging.
+            if (!nextMuted) setAutoMuted(false);
+          }}
           canControl={canControl}
           onLocalTransport={(playing) => {
             if (!canControl) return;
@@ -509,14 +523,7 @@ export default function App() {
               setMuted(true);
               rememberAudio({ volume, muted: true });
             }}
-            disabled={spotifyActive}
-            title={
-              spotifyActive
-                ? "Spotify volume is controlled from your own Spotify app"
-                : muted
-                  ? "Unmute"
-                  : "Mute"
-            }
+            title={muted ? "Unmute" : "Mute"}
           >
             {muted || volume === 0 ? "🔇" : "🔊"}
           </button>
@@ -525,7 +532,6 @@ export default function App() {
             min={0}
             max={100}
             value={muted ? 0 : volume}
-            disabled={spotifyActive}
             onChange={(e) => {
               const next = Number(e.target.value);
               setVolume(next);
@@ -618,11 +624,7 @@ export default function App() {
         <input
           type="text"
           placeholder={
-            canControl
-              ? SPOTIFY_ENABLED
-                ? "Paste a YouTube or Spotify link…"
-                : "Paste a YouTube link…"
-              : "Request a song…"
+            canControl ? "Paste a YouTube link…" : "Request a song…"
           }
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
@@ -664,17 +666,12 @@ export default function App() {
         </ul>
       )}
 
-      {spotifyNotice && (
-        <div className="notice">
-          <span>
-            Heads up: Spotify only plays for listeners signed into their own account, and free
-            accounts hear 30-second previews. YouTube plays for everyone.
-          </span>
-          <button className="notice-dismiss" onClick={() => setSpotifyNotice(false)} title="Dismiss">
-            ✕
-          </button>
-        </div>
-      )}
+      {/* The song list had no label of its own, which left it reading as a
+          loose pile of rows under the add box rather than a named section. */}
+      <p className="section-heading">
+        <span>Playlist</span>
+        {room.queue.length > 0 && <span className="section-count">{room.queue.length}</span>}
+      </p>
 
       <ul className="queue">
         {room.queue.map((item, index) => {
@@ -687,28 +684,64 @@ export default function App() {
                 "queue-item",
                 isCurrent ? "queue-item--active" : "",
                 dragIndex === index ? "queue-item--dragging" : "",
+                overIndex === index && dragIndex !== index ? "queue-item--over" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
-              draggable={canControl}
-              onDragStart={() => setDragIndex(index)}
+              // Only armed by the handle below. The row is mostly a <button>,
+              // and a mousedown on a button doesn't reliably start an
+              // ancestor's drag — so a permanently-draggable row is one you
+              // can't actually grab anywhere useful.
+              draggable={canControl && dragArmed}
+              onDragStart={(e) => {
+                setDragIndex(index);
+                // Firefox refuses to begin a drag at all unless the payload is
+                // set, even when nothing reads it back.
+                e.dataTransfer.setData("text/plain", String(index));
+                e.dataTransfer.effectAllowed = "move";
+              }}
               onDragOver={(e) => {
-                if (dragIndex !== null) e.preventDefault();
+                if (dragIndex === null) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (overIndex !== index) setOverIndex(index);
+              }}
+              onDragLeave={() => {
+                if (overIndex === index) setOverIndex(null);
               }}
               onDrop={(e) => {
                 e.preventDefault();
                 if (dragIndex !== null) moveItem(dragIndex, index);
-                setDragIndex(null);
+                endDrag();
               }}
-              onDragEnd={() => setDragIndex(null)}
+              onDragEnd={endDrag}
             >
               {canControl && (
-                <span className="drag-handle" title="Drag to reorder">
+                <span
+                  className="drag-handle"
+                  title="Drag to reorder"
+                  onPointerDown={() => setDragArmed(true)}
+                  onPointerUp={() => setDragArmed(false)}
+                >
                   ⠿
                 </span>
               )}
-              <span className={`badge badge--${item.link.source}`}>
-                {SOURCE_LABEL[item.link.source]}
+              {/* Always rendered, even when empty, so every title starts at
+                  the same x and the list doesn't shuffle sideways as the
+                  current track changes. */}
+              <span className="now-playing">
+                {isCurrent && (
+                  <span
+                    className={room.isPlaying ? "eq eq--playing" : "eq"}
+                    role="img"
+                    aria-label={room.isPlaying ? "Now playing" : "Current track, paused"}
+                    title={room.isPlaying ? "Now playing" : "Current track, paused"}
+                  >
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                )}
               </span>
               <button className="queue-title" onClick={() => playAt(index)} disabled={!canControl} title={item.url}>
                 {item.title}
@@ -722,6 +755,29 @@ export default function App() {
                   {showPlaylist ? "▾" : "▸"} {playlistIds.length}
                 </button>
               )}
+              {/* Drag-and-drop is mouse-only — it never fires on a touchscreen,
+                  and can't be reached from the keyboard. These are the same
+                  reorder, available everywhere. */}
+              {canControl && room.queue.length > 1 && (
+                <span className="reorder">
+                  <button
+                    onClick={() => moveItem(index, index - 1)}
+                    disabled={index === 0}
+                    title="Move up"
+                    aria-label={`Move ${item.title} up`}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => moveItem(index, index + 1)}
+                    disabled={index === room.queue.length - 1}
+                    title="Move down"
+                    aria-label={`Move ${item.title} down`}
+                  >
+                    ▼
+                  </button>
+                </span>
+              )}
               <button className="remove" onClick={() => removeAt(index)} disabled={!canControl} title="Remove">
                 ✕
               </button>
@@ -731,6 +787,12 @@ export default function App() {
 
         {showPlaylist && currentIsPlaylist && (
           <li className="playlist-contents">
+            {/* Without this the indented list is unlabelled, and it isn't
+                obvious these are the playlist's tracks rather than the queue. */}
+            <p className="section-heading">
+              <span>Tracks in this playlist</span>
+              <span className="section-count">{playlistIds.length}</span>
+            </p>
             <ol>
               {playlistIds.map((id, i) => (
                 <li key={`${id}-${i}`}>
@@ -745,6 +807,31 @@ export default function App() {
         {room.queue.length === 0 && <li className="queue-empty">Nothing queued yet.</li>}
       </ul>
 
+      {/* Everyone in the room sees this, not just the GM — a listener hitting a
+          problem is the person most likely to want to report one. */}
+      <div className="support">
+        <button
+          type="button"
+          className="support-toggle"
+          onClick={() => setShowSupport((v) => !v)}
+          aria-expanded={showSupport}
+          aria-controls="support-details"
+        >
+          Problem or suggestion? <span aria-hidden="true">{showSupport ? "▾" : "▸"}</span>
+        </button>
+        {showSupport && (
+          <p id="support-details" className="support-details">
+            <a href={ISSUES_URL} target="_blank" rel="noreferrer">
+              Open an issue on GitHub
+            </a>
+            {" or email "}
+            {/* The address is the link text on purpose: a sandboxed iframe may
+                refuse to open a mailto:, and a dead link with no visible
+                address would leave someone with nowhere to go. */}
+            <a href={`mailto:${SUPPORT_EMAIL}?subject=Tabletop%20Tunes`}>{SUPPORT_EMAIL}</a>
+          </p>
+        )}
+      </div>
     </div>
   );
 }

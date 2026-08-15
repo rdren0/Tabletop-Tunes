@@ -47,6 +47,30 @@ export function usePlayerName(ready: boolean): string {
   return name;
 }
 
+/**
+ * Mirrors Owlbear's light/dark setting onto the document, which the stylesheet
+ * keys off via `[data-theme]`.
+ *
+ * Deliberately not `prefers-color-scheme`: Owlbear's theme is its own setting,
+ * independent of the operating system's, so a media query would disagree with
+ * the app surrounding this panel as often as it agreed.
+ */
+export function useObrTheme(ready: boolean) {
+  useEffect(() => {
+    if (!ready) return;
+    const apply = (mode: "LIGHT" | "DARK") => {
+      document.documentElement.dataset.theme = mode === "LIGHT" ? "light" : "dark";
+    };
+    OBR.theme
+      .getTheme()
+      .then((theme) => apply(theme.mode))
+      .catch(() => {
+        // Unreadable theme just leaves the dark default in place.
+      });
+    return OBR.theme.onChange((theme) => apply(theme.mode));
+  }, [ready]);
+}
+
 /** Smallest sensible popover, so a momentarily empty panel isn't a sliver. */
 const MIN_POPOVER_HEIGHT = 180;
 /** Beyond this the panel stops growing and its queue scrolls instead. */
