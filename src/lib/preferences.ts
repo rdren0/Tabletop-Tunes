@@ -1,56 +1,78 @@
+import OBR from "@owlbear-rodeo/sdk";
+
 /**
- * Per-listener settings that outlive the popover. Owlbear tears down the
+ * Per-listener audio settings that outlive the popover. Owlbear tears down the
  * extension's iframe every time the popover is dismissed, so anything kept
  * only in React state is back to its default on the next open.
  *
- * These live in localStorage rather than room metadata on purpose: volume is
- * one person's preference, not part of the shared mix, and it should follow
- * them from room to room instead of being re-learned in each one.
+ * Two stores, because neither is sufficient alone:
  *
- * Every access is guarded. Storage throws outright in some privacy modes, and
- * a browser that partitions or blocks storage for embedded frames simply gets
- * the defaults back — a forgotten volume is a far better failure than a
- * popover that won't render.
+ * - Owlbear's own per-player metadata is authoritative. It travels through the
+ *   SDK rather than browser storage, so it works even when the browser blocks
+ *   or partitions storage for embedded frames — which is the case localStorage
+ *   alone silently failed. It's scoped to the room, and reading it is async.
+ * - localStorage seeds the initial value synchronously, so there's no moment
+ *   at default volume while the metadata read resolves, and it carries the
+ *   setting into rooms this player hasn't opened the panel in before.
+ *
+ * Writes go to both. Reads prefer the player metadata once it arrives.
  */
 
-const VOLUME_KEY = "rodeo.tabletoptunes/volume";
-const MUTED_KEY = "rodeo.tabletoptunes/muted";
+const STORAGE_KEY = "rodeo.tabletoptunes/audio";
+const METADATA_KEY = "rodeo.tabletoptunes/audio";
 
 export const DEFAULT_VOLUME = 70;
 
-export function loadVolume(): number {
+export interface AudioPrefs {
+  volume: number;
+  muted: boolean;
+}
+
+export const DEFAULT_AUDIO_PREFS: AudioPrefs = { volume: DEFAULT_VOLUME, muted: false };
+
+/** Nothing stored should be able to strand someone at silence. */
+function coerce(raw: unknown): AudioPrefs | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { volume, muted } = raw as Partial<AudioPrefs>;
+  if (typeof volume !== "number" || !Number.isFinite(volume)) return null;
+  return {
+    volume: Math.min(100, Math.max(0, volume)),
+    muted: muted === true,
+  };
+}
+
+export function loadLocalPrefs(): AudioPrefs {
   try {
-    const raw = window.localStorage.getItem(VOLUME_KEY);
-    if (raw === null) return DEFAULT_VOLUME;
-    const value = Number(raw);
-    // Never let a corrupt entry strand someone at silence with no obvious cause.
-    if (!Number.isFinite(value) || value < 0 || value > 100) return DEFAULT_VOLUME;
-    return value;
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_AUDIO_PREFS;
+    return coerce(JSON.parse(raw)) ?? DEFAULT_AUDIO_PREFS;
   } catch {
-    return DEFAULT_VOLUME;
+    // Storage unavailable or holding junk; the defaults are a fine answer.
+    return DEFAULT_AUDIO_PREFS;
   }
 }
 
-export function saveVolume(value: number) {
+function saveLocalPrefs(prefs: AudioPrefs) {
   try {
-    window.localStorage.setItem(VOLUME_KEY, String(value));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
   } catch {
-    // Storage unavailable; the setting just won't survive this session.
+    // Blocked storage is exactly why the player metadata copy exists.
   }
 }
 
-export function loadMuted(): boolean {
+/** The copy that survives when the browser won't give the iframe storage. */
+export async function loadPlayerPrefs(): Promise<AudioPrefs | null> {
   try {
-    return window.localStorage.getItem(MUTED_KEY) === "true";
+    const metadata = await OBR.player.getMetadata();
+    return coerce(metadata[METADATA_KEY]);
   } catch {
-    return false;
+    return null;
   }
 }
 
-export function saveMuted(value: boolean) {
-  try {
-    window.localStorage.setItem(MUTED_KEY, String(value));
-  } catch {
-    // As above — non-fatal.
-  }
+export function savePrefs(prefs: AudioPrefs) {
+  saveLocalPrefs(prefs);
+  // setMetadata rejects if the extension isn't ready yet; a dropped write here
+  // only costs this one change, and localStorage has already taken it.
+  OBR.player.setMetadata({ [METADATA_KEY]: prefs }).catch(() => {});
 }

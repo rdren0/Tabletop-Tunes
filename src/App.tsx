@@ -19,7 +19,7 @@ import {
   requestStatusOf,
 } from "./types";
 import { SPOTIFY_ENABLED } from "./config";
-import { loadMuted, loadVolume, saveMuted, saveVolume } from "./lib/preferences";
+import { loadLocalPrefs, loadPlayerPrefs, savePrefs } from "./lib/preferences";
 
 const SOURCE_LABEL: Record<string, string> = {
   youtube: "YouTube",
@@ -36,8 +36,10 @@ export default function App() {
   const [inputValue, setInputValue] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [volume, setVolume] = useState(loadVolume);
-  const [muted, setMuted] = useState(loadMuted);
+  // Seeded synchronously so there's no moment at default volume; the
+  // authoritative value arrives from player metadata just below.
+  const [volume, setVolume] = useState(() => loadLocalPrefs().volume);
+  const [muted, setMuted] = useState(() => loadLocalPrefs().muted);
   // True when the browser refused audio and playback started muted, so the
   // speaker button can be explained rather than just looking wrong.
   const [autoMuted, setAutoMuted] = useState(false);
@@ -61,14 +63,37 @@ export default function App() {
     unmuteAll();
     setMuted(false);
     setAutoMuted(false);
-    saveMuted(false);
+    rememberAudio({ volume, muted: false });
   }
 
-  // The slider is the only thing that moves volume, so mirroring it here keeps
-  // every path covered.
+  /**
+   * Records a choice the listener actually made. Never called for the
+   * auto-mute: that's the browser refusing audio, not a preference, and
+   * storing it would leave them silent in future sessions for a reason they
+   * never chose.
+   */
+  const prefsTimer = useRef(0);
+  function rememberAudio(prefs: { volume: number; muted: boolean }) {
+    // Dragging the slider fires continuously, and each metadata write is a
+    // round trip through Owlbear — settle first, then store.
+    window.clearTimeout(prefsTimer.current);
+    prefsTimer.current = window.setTimeout(() => savePrefs(prefs), 300);
+  }
+
+  // Owlbear's per-player store is the copy that survives when the browser
+  // denies the embedded frame its own storage, so it wins once it loads.
   useEffect(() => {
-    saveVolume(volume);
-  }, [volume]);
+    if (!ready) return;
+    let cancelled = false;
+    loadPlayerPrefs().then((prefs) => {
+      if (cancelled || !prefs) return;
+      setVolume(prefs.volume);
+      setMuted(prefs.muted);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready]);
 
   // Embedded players can be awkward to click directly, so treat any click in
   // the popover as the user gesture the browser wants before it allows audio.
@@ -461,11 +486,7 @@ export default function App() {
                 return;
               }
               setMuted(true);
-              // Only a deliberate mute is remembered. The auto-mute below is
-              // the browser refusing audio, not a preference — persisting it
-              // would leave this listener silent in every future session for a
-              // reason they never chose.
-              saveMuted(true);
+              rememberAudio({ volume, muted: true });
             }}
             disabled={spotifyActive}
             title={
@@ -485,8 +506,11 @@ export default function App() {
             value={muted ? 0 : volume}
             disabled={spotifyActive}
             onChange={(e) => {
-              setVolume(Number(e.target.value));
+              const next = Number(e.target.value);
+              setVolume(next);
+              // Moving the slider is itself an intent to hear something.
               if (muted) unmuteNow();
+              rememberAudio({ volume: next, muted: false });
             }}
           />
         </div>
