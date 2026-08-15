@@ -39,10 +39,18 @@ body {
   flex-direction: column;
 }
 
-.stage-scrim {
+/* The embed is hidden rather than dimmed: covering a visible player with a
+   translucent layer is exactly what YouTube's embed terms rule out, and a
+   listener has nothing to do with it while the room is paused anyway.
+   `visibility` keeps the stage's box — and its aspect ratio — reserved, so the
+   panel doesn't resize every time the GM pauses. */
+.stage-wrap--concealed .player-stage {
+  visibility: hidden;
+}
+
+.stage-notice {
   position: absolute;
   inset: 0;
-  /* Above the embed's iframe, which creates its own stacking context. */
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -52,20 +60,20 @@ body {
   border-radius: 8px;
   padding: 12px;
   text-align: center;
-  background: rgba(12, 12, 16, 0.82);
+  background: #17171d;
+  border: 1px solid #2f2f3a;
   color: #ddd;
   font-size: 13px;
-  /* Swallow the click rather than letting it reach the embed. */
   cursor: default;
   user-select: none;
 }
 
-.stage-scrim-icon {
+.stage-notice-icon {
   font-size: 22px;
   color: #b7a4ff;
 }
 
-.stage-scrim em {
+.stage-notice em {
   font-style: normal;
   font-size: 11px;
   color: #8a8a94;
@@ -703,6 +711,61 @@ body {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+}
+
+/* The requester's own view of what they asked for. Deliberately lighter than
+   the GM's request panel — it's a receipt, not a control surface. */
+.my-requests {
+  list-style: none;
+  margin: -4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.my-request {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid #3a3a45;
+  background: #26262e;
+}
+
+.my-request-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ccc;
+}
+
+.my-request-status {
+  flex-shrink: 0;
+  color: #999;
+}
+
+.my-request--approved {
+  border-color: #3f6b48;
+}
+
+.my-request--approved .my-request-status {
+  color: #7fd18f;
+}
+
+.my-request--declined {
+  opacity: 0.75;
+}
+
+.my-request--declined .my-request-status {
+  color: #d68a8a;
+}
+
+.my-request--pending .my-request-status {
+  color: #b7a4ff;
 }
 
 .queue-empty {

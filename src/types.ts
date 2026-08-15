@@ -7,10 +7,36 @@ export interface QueueItem {
   link: ParsedLink;
 }
 
+export type RequestStatus = "pending" | "approved" | "declined";
+
 /** A track a listener has proposed; a GM or DJ decides whether it joins the queue. */
 export interface SongRequest extends QueueItem {
   requestedById: string;
   requestedByName: string;
+  /**
+   * A decided request sticks around briefly rather than vanishing, so the
+   * person who asked learns which way it went. Absent on requests written by
+   * an older version of the extension, which were always pending.
+   */
+  status?: RequestStatus;
+  resolvedAt?: number; // epoch ms the decision was made
+}
+
+/** How long a decided request lingers so the requester can see the outcome. */
+export const REQUEST_RESULT_TTL_MS = 60_000;
+
+export function requestStatusOf(request: SongRequest): RequestStatus {
+  return request.status ?? "pending";
+}
+
+/**
+ * Drops decisions old enough to have been seen. Room metadata is a small,
+ * shared budget, so resolved requests must not accumulate in it.
+ */
+export function pruneRequests(requests: SongRequest[], now = Date.now()): SongRequest[] {
+  return requests.filter(
+    (r) => requestStatusOf(r) === "pending" || now - (r.resolvedAt ?? 0) < REQUEST_RESULT_TTL_MS
+  );
 }
 
 /**

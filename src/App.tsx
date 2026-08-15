@@ -10,10 +10,16 @@ import {
 import { parseLink } from "./lib/parseLink";
 import { fetchTitle } from "./lib/fetchTitle";
 import { PlayerStage } from "./components/PlayerStage";
-import { AmbienceLayer } from "./components/AmbienceStage";
 import { notifyGesture, unmuteAll } from "./lib/audioGestures";
-import { AmbienceStream, QueueItem, SongRequest } from "./types";
-import { AMBIENCE_ENABLED, SPOTIFY_ENABLED } from "./config";
+import {
+  QueueItem,
+  REQUEST_RESULT_TTL_MS,
+  SongRequest,
+  pruneRequests,
+  requestStatusOf,
+} from "./types";
+import { SPOTIFY_ENABLED } from "./config";
+import { loadMuted, loadVolume, saveMuted, saveVolume } from "./lib/preferences";
 
 const SOURCE_LABEL: Record<string, string> = {
   youtube: "YouTube",
@@ -30,8 +36,8 @@ export default function App() {
   const [inputValue, setInputValue] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [volume, setVolume] = useState(70);
-  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(loadVolume);
+  const [muted, setMuted] = useState(loadMuted);
   // True when the browser refused audio and playback started muted, so the
   // speaker button can be explained rather than just looking wrong.
   const [autoMuted, setAutoMuted] = useState(false);
@@ -44,22 +50,7 @@ export default function App() {
   // without nagging on every Spotify link that follows.
   const spotifyWarned = useRef(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [requestSent, setRequestSent] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
-  // Per-listener, exactly like the music volume, and deliberately quiet to
-  // start — ambience is meant to sit under things.
-  const [ambienceVolume, setAmbienceVolume] = useState(30);
-  // Its own mute, independent of the music's — ambience is a separate layer,
-  // so silencing one shouldn't silence the other.
-  const [ambienceMuted, setAmbienceMuted] = useState(false);
-  // Layers already running when this panel opened are "found", not "started",
-  // so they wait for a click rather than sounding unprompted.
-  const foundRunning = useRef<Set<string> | null>(null);
-  if (foundRunning.current === null) {
-    foundRunning.current = new Set(room.ambience.filter((s) => s.playing).map((s) => s.id));
-  }
-  const [ambienceInput, setAmbienceInput] = useState("");
-  const [ambienceError, setAmbienceError] = useState<string | null>(null);
   const [playlistIds, setPlaylistIds] = useState<string[]>([]);
   const [playlistTitles, setPlaylistTitles] = useState<Record<string, string>>({});
   // This client's live playback position, kept out of state so the 2s
@@ -70,23 +61,17 @@ export default function App() {
     unmuteAll();
     setMuted(false);
     setAutoMuted(false);
+    saveMuted(false);
   }
 
-  // Ambience switched on last session shouldn't come back by itself — the GM
-  // starts a session with everything silent and turns layers on deliberately.
-  const ambienceReset = useRef(false);
+  // The slider is the only thing that moves volume, so mirroring it here keeps
+  // every path covered.
   useEffect(() => {
-    if (!ready || !isGM || ambienceReset.current) return;
-    if (room.ambience.length === 0) return;
-    ambienceReset.current = true;
-    if (room.ambience.some((s) => s.playing)) {
-      patchRoom({ ambience: room.ambience.map((s) => ({ ...s, playing: false })) });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, isGM, room.ambience.length]);
+    saveVolume(volume);
+  }, [volume]);
 
-  // Ambience players are invisible, so they can never be clicked directly.
-  // Treat any click in the popover as the gesture they need.
+  // Embedded players can be awkward to click directly, so treat any click in
+  // the popover as the user gesture the browser wants before it allows audio.
   useEffect(() => {
     const handler = () => notifyGesture();
     document.addEventListener("click", handler);
@@ -117,7 +102,13 @@ export default function App() {
     : room.isPlaying
       ? "playing"
       : "paused";
-  const activeAmbienceCount = room.ambience.filter((s) => s.playing).length;
+  // While the room is paused a listener has no use for the embed, and leaving
+  // it there only invites a press that the heartbeat undoes a second later.
+  const stageConcealed = !canControl && listenerState === "paused";
+  // Whoever runs the room only ever acts on undecided requests; the decided
+  // ones are hanging around purely as feedback for the person who asked.
+  const pendingRequests = room.requests.filter((r) => requestStatusOf(r) === "pending");
+  const myRequests = playerId ? room.requests.filter((r) => r.requestedById === playerId) : [];
 
   // Long tracks drift, so the client driving the queue republishes its position
   // periodically. Exactly one writer, same as auto-advance.
@@ -154,6 +145,22 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPlaylist, playlistIds]);
+
+  // A decided request clears itself once its notice has had time to be read.
+  // The requester sweeps their own: they are the one client that definitely
+  // cares, and it keeps stale outcomes out of room metadata even when nobody
+  // is queueing anything else.
+  useEffect(() => {
+    const mine = myRequests.filter((r) => requestStatusOf(r) !== "pending");
+    if (mine.length === 0) return;
+    const due = Math.min(...mine.map((r) => r.resolvedAt ?? 0)) + REQUEST_RESULT_TTL_MS - Date.now();
+    const timer = window.setTimeout(
+      () => patchRoom({ requests: pruneRequests(room.requests) }),
+      Math.max(due, 0)
+    );
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.requests, playerId]);
 
   function setDJ(id: string, granted: boolean) {
     if (!isGM) return;
@@ -316,67 +323,47 @@ export default function App() {
       link,
       requestedById: playerId ?? "unknown",
       requestedByName: playerName,
+      status: "pending",
     };
-    patchRoom({ requests: [...room.requests, request] });
+    patchRoom({ requests: [...pruneRequests(room.requests), request] });
     setInputValue("");
     setAdding(false);
-    setRequestSent(true);
-    window.setTimeout(() => setRequestSent(false), 4000);
   }
 
   function approveRequest(request: SongRequest) {
     if (!canControl) return;
-    const { requestedById: _id, requestedByName: _name, ...item } = request;
+    const {
+      requestedById: _id,
+      requestedByName: _name,
+      status: _status,
+      resolvedAt: _resolvedAt,
+      ...item
+    } = request;
     const nextQueue = [...room.queue, item as QueueItem];
     const isFirstItem = room.currentIndex === -1;
     patchRoom({
       queue: nextQueue,
-      requests: room.requests.filter((r) => r.id !== request.id),
+      requests: resolveRequest(request.id, "approved"),
       currentIndex: isFirstItem ? 0 : room.currentIndex,
       isPlaying: isFirstItem ? true : room.isPlaying,
       ...(isFirstItem ? restartAnchor() : {}),
     });
   }
 
-  /** Ambience is YouTube-only: it needs looping and volume, which Spotify lacks. */
-  async function addAmbience() {
-    if (!canControl) return;
-    const link = parseLink(ambienceInput);
-    if (!link || link.source !== "youtube" || link.kind !== "video") {
-      setAmbienceError("Ambience needs a single YouTube video link.");
-      return;
-    }
-    setAmbienceError(null);
-    const title = await fetchTitle(ambienceInput, link);
-    const stream: AmbienceStream = {
-      id: crypto.randomUUID(),
-      url: ambienceInput.trim(),
-      title,
-      videoId: link.mediaId,
-      // Each listener scales ambience themselves, so a stream carries no
-      // shared level of its own.
-      volume: 100,
-      playing: false,
-    };
-    patchRoom({ ambience: [...room.ambience, stream] });
-    setAmbienceInput("");
-  }
-
-  function updateAmbience(id: string, patch: Partial<AmbienceStream>) {
-    if (!canControl) return;
-    patchRoom({
-      ambience: room.ambience.map((s) => (s.id === id ? { ...s, ...patch } : s)),
-    });
-  }
-
-  function removeAmbience(id: string) {
-    if (!canControl) return;
-    patchRoom({ ambience: room.ambience.filter((s) => s.id !== id) });
+  /**
+   * Records a decision on the request list rather than deleting the entry —
+   * a request that simply disappears leaves the person who asked unable to
+   * tell approval from refusal.
+   */
+  function resolveRequest(id: string, status: "approved" | "declined"): SongRequest[] {
+    return pruneRequests(
+      room.requests.map((r) => (r.id === id ? { ...r, status, resolvedAt: Date.now() } : r))
+    );
   }
 
   function dismissRequest(id: string) {
     if (!canControl) return;
-    patchRoom({ requests: room.requests.filter((r) => r.id !== id) });
+    patchRoom({ requests: resolveRequest(id, "declined") });
   }
 
   if (!ready) {
@@ -388,10 +375,10 @@ export default function App() {
       {/* The embed's own play button is the one control a browser always
           honours, so it stays reachable whenever the room is actually playing —
           that's the case where a listener needs it to defeat autoplay blocking.
-          While the room is paused there is nothing for it to recover, and
-          pressing it only gets undone by the heartbeat a second later, so a
-          scrim covers it and says why instead of letting them fight the sync. */}
-      <div className="stage-wrap">
+          While the room is paused it's hidden behind a notice instead.
+          Hidden, not unmounted: destroying the player would reload the video
+          and lose its place every time the GM paused. */}
+      <div className={stageConcealed ? "stage-wrap stage-wrap--concealed" : "stage-wrap"}>
         <PlayerStage
           item={currentItem}
           isPlaying={room.isPlaying}
@@ -414,11 +401,11 @@ export default function App() {
           onPlaylistLoaded={setPlaylistIds}
           onEnded={handleEnded}
         />
-        {!canControl && listenerState === "paused" && (
-          <div className="stage-scrim" role="status">
-            <span className="stage-scrim-icon">⏸</span>
-            <span>Paused by the GM</span>
-            <em>Playback resumes for everyone when they hit play.</em>
+        {stageConcealed && (
+          <div className="stage-notice" role="status">
+            <span className="stage-notice-icon">⏸</span>
+            <span>The GM has paused the music</span>
+            <em>It picks back up for everyone when they hit play.</em>
           </div>
         )}
       </div>
@@ -469,8 +456,16 @@ export default function App() {
             type="button"
             className="mute"
             onClick={() => {
-              if (muted) unmuteNow();
-              else setMuted(true);
+              if (muted) {
+                unmuteNow();
+                return;
+              }
+              setMuted(true);
+              // Only a deliberate mute is remembered. The auto-mute below is
+              // the browser refusing audio, not a preference — persisting it
+              // would leave this listener silent in every future session for a
+              // reason they never chose.
+              saveMuted(true);
             }}
             disabled={spotifyActive}
             title={
@@ -505,8 +500,6 @@ export default function App() {
           </button>
         )}
       </div>
-      {/* Ambience runs on its own transport: each stream's own toggle decides
-          whether it sounds, independent of whatever the queue is doing. */}
 
       {autoMuted && muted && (
         <p className="hint hint--dj">
@@ -552,11 +545,11 @@ export default function App() {
       )}
 
 
-      {canControl && room.requests.length > 0 && (
+      {canControl && pendingRequests.length > 0 && (
         <div className="requests">
           <p className="dj-panel-title">Requests</p>
           <ul className="dj-list">
-            {room.requests.map((request) => (
+            {pendingRequests.map((request) => (
               <li key={request.id} className="request-item">
                 <span className="request-title" title={request.url}>
                   {request.title}
@@ -597,11 +590,34 @@ export default function App() {
           {adding ? "…" : canControl ? "Add" : "Request"}
         </button>
       </div>
-      {!canControl && !requestSent && (
+      {!canControl && myRequests.length === 0 && (
         <p className="hint">Requests go to the GM and DJs to approve.</p>
       )}
-      {requestSent && <p className="hint hint--dj">Request sent.</p>}
       {addError && <p className="error">{addError}</p>}
+
+      {/* What became of the tracks this player asked for. Decided entries are
+          swept a minute after the fact, so this list stays short. */}
+      {myRequests.length > 0 && (
+        <ul className="my-requests">
+          {myRequests.map((request) => {
+            const status = requestStatusOf(request);
+            return (
+              <li key={request.id} className={`my-request my-request--${status}`}>
+                <span className="my-request-title" title={request.url}>
+                  {request.title}
+                </span>
+                <span className="my-request-status">
+                  {status === "approved"
+                    ? "✓ Added to the queue"
+                    : status === "declined"
+                      ? "✕ Not this time"
+                      : "⏳ Pending approval"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {spotifyNotice && (
         <div className="notice">
@@ -684,124 +700,6 @@ export default function App() {
         {room.queue.length === 0 && <li className="queue-empty">Nothing queued yet.</li>}
       </ul>
 
-      {/* A separate instrument from the queue: looping beds with their own
-          transport, which keep running regardless of what the queue is doing. */}
-      {!AMBIENCE_ENABLED && (
-        <section className="ambience-panel">
-          <div className="ambience-bar">
-            <span className="ambience-header-label ambience-header-label--static">
-              🌧 Ambience
-              <em className="ambience-header-meta"> coming soon</em>
-            </span>
-          </div>
-        </section>
-      )}
-
-      {AMBIENCE_ENABLED && (canControl || activeAmbienceCount > 0) && (
-        <section className="ambience-panel">
-          <div className="ambience-bar">
-            {canControl ? (
-              // Always open for whoever runs it — the layers are the control
-              // surface, not something to be tucked away.
-              <span className="ambience-header-label ambience-header-label--static">
-                🌧 Ambience
-                <em className="ambience-header-meta">
-                  {activeAmbienceCount > 0 ? ` ${activeAmbienceCount} playing` : " off"}
-                </em>
-              </span>
-            ) : (
-              // Listeners get the level and nothing else — no list, no
-              // transport — and it's visible without opening anything.
-              <span className="ambience-header-label ambience-header-label--static">
-                🌧 Ambience
-              </span>
-            )}
-            <button
-              type="button"
-              className="mute mute--ambience"
-              onClick={() => setAmbienceMuted((m) => !m)}
-              title={ambienceMuted ? "Unmute ambience" : "Mute ambience"}
-            >
-              {ambienceMuted || ambienceVolume === 0 ? "🔇" : "🔊"}
-            </button>
-            <input
-              className="ambience-listener-volume"
-              type="range"
-              min={0}
-              max={100}
-              value={ambienceMuted ? 0 : ambienceVolume}
-              title="Ambience volume — yours only"
-              onChange={(e) => {
-                setAmbienceVolume(Number(e.target.value));
-                setAmbienceMuted(false);
-              }}
-            />
-          </div>
-
-          {/* Listeners have no rows, so their players mount here instead. */}
-          {!canControl && (
-            <div className="ambience-stage">
-              {room.ambience.map((stream) => (
-                <AmbienceLayer
-                  key={stream.id}
-                  stream={stream}
-                  listenerVolume={ambienceVolume}
-                  muted={ambienceMuted}
-                  startedHere={!foundRunning.current?.has(stream.id)}
-                  canControl={false}
-                  onToggle={() => {}}
-                />
-              ))}
-            </div>
-          )}
-
-          {canControl && (
-            <div className="ambience-body">
-              <p className="ambience-blurb">
-                Looping sounds that play independently of the queue. Everyone sets their own
-                ambience volume.
-              </p>
-              <ul className="dj-list">
-                {room.ambience.map((stream) => (
-                  <li key={stream.id} className="ambience-item">
-                    <AmbienceLayer
-                      stream={stream}
-                      listenerVolume={ambienceVolume}
-                      muted={ambienceMuted}
-                      startedHere={!foundRunning.current?.has(stream.id)}
-                      canControl
-                      onToggle={() => updateAmbience(stream.id, { playing: !stream.playing })}
-                    />
-                    <span className="ambience-title" title={stream.url}>
-                      {stream.title}
-                    </span>
-                    <button
-                      className="remove"
-                      onClick={() => removeAmbience(stream.id)}
-                      title="Remove"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <div className="add-row add-row--ambience">
-                <input
-                  type="text"
-                  placeholder="YouTube link to loop…"
-                  value={ambienceInput}
-                  onChange={(e) => setAmbienceInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addAmbience()}
-                />
-                <button onClick={addAmbience} disabled={!ambienceInput.trim()}>
-                  Add
-                </button>
-              </div>
-              {ambienceError && <p className="error">{ambienceError}</p>}
-            </div>
-          )}
-        </section>
-      )}
     </div>
   );
 }
