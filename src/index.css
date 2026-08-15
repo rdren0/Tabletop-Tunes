@@ -424,6 +424,20 @@ body {
   line-height: 1.35;
 }
 
+/* An instruction rather than an aside, so it takes the accent instead of the
+   warning palette — nothing is wrong, the reader just has to do something. */
+.notice--action {
+  margin: -4px 0 0;
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--text-dim);
+}
+
+.notice--action strong {
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
 .notice-dismiss {
   background: none;
   border: none;

@@ -1,0 +1,97 @@
+---
+title: Tabletop Tunes
+description: Queue YouTube music and play it in sync with your whole party
+author: Rachael
+image: https://tabletop-tunes.com/hero.svg
+icon: https://tabletop-tunes.com/store-icon.svg
+tags:
+  - audio
+  - tool
+manifest: https://tabletop-tunes.com/manifest.json
+learn-more: https://github.com/rdren0/Tabletop-Tunes
+---
+
+# Tabletop Tunes
+
+Shared music for your table. Paste a YouTube link, build a queue, and when you
+hit play everyone hears the same track at the same moment — no counting down
+over voice chat, no one lagging half a verse behind.
+
+<!--
+  SCREENSHOT — replace this comment with the main panel in action, e.g.
+  ![The Tabletop Tunes panel with a queue](https://tabletop-tunes.com/screenshots/panel.png)
+-->
+
+**Getting started.** Open the panel from the toolbar, paste a YouTube video or
+playlist link, and press Add. The first track starts straight away; anything
+after it joins the queue. Click any track to jump to it, drag the handle to
+reorder, and use the transport to play, pause, or skip for the whole room.
+
+## Everyone stays in step
+
+Playback is shared through the room, not broadcast from one machine, so there's
+no host to keep online and nothing to re-sync by hand. Clients work out where
+they should be and quietly correct themselves only when they've drifted far
+enough to notice — a late arrival drops straight into the right moment of the
+track rather than starting it over for everybody.
+
+Volume and mute stay personal. Each player sets their own level, and it's
+remembered next time they open the panel, so the one person who wants the
+battle music loud doesn't decide it for the table.
+
+## Hand out the aux cable
+
+By default the GM controls everything. Grant **DJ** access to any player and
+they get the same queue and transport controls — useful when someone else is
+running a scene, or when you'd rather not be the one picking tracks all night.
+
+<!--
+  SCREENSHOT — replace with the DJ privileges panel, e.g.
+  ![Granting DJ access to a player](https://tabletop-tunes.com/screenshots/dj.png)
+-->
+
+## Requests from the table
+
+Players without control can suggest a track instead. It goes to the GM and any
+DJs to approve or decline, and — unlike a suggestion shouted over voice chat —
+the person who asked is actually told what happened to it.
+
+<!--
+  SCREENSHOT — replace with the requests list, e.g.
+  ![A pending song request awaiting approval](https://tabletop-tunes.com/screenshots/requests.png)
+-->
+
+## Built to sit in the corner
+
+The panel follows Owlbear's light and dark theme, and sizes itself to whatever
+it's showing rather than leaving a tall empty box under a short queue. Players
+always know why the room is quiet — nothing queued yet, or the GM has paused —
+instead of staring at a panel that looks broken.
+
+Reordering works by dragging on a desktop and with the up/down buttons on a
+phone, tablet, or keyboard.
+
+## Good to know
+
+**Everyone presses play once per session.** Browsers refuse to start audio that
+the person sitting there didn't ask for — Chrome is the strictest, but they all
+do it. So when the GM starts the music, each player presses play on the video
+once. After that the GM's controls drive their playback for the rest of the
+session: skips, pauses and new tracks all follow automatically. The panel says
+so when it's waiting on you, so nobody has to remember.
+
+- **YouTube only.** Videos and playlists, pasted as links. There's no search —
+  find the track on YouTube and paste it.
+- **Phones and tablets** are stricter still, and a player may land in muted
+  playback until they tap.
+- **Ads.** Playback uses YouTube's own embedded player, so viewers without a
+  YouTube Premium account may occasionally get an ad.
+
+## Support
+
+Bug reports, questions and requests are all welcome.
+
+- Issue tracker: <https://github.com/rdren0/Tabletop-Tunes/issues>
+- Email: rdrennan0@gmail.com
+
+You don't need a GitHub account to email.

@@ -53,10 +53,15 @@ looks broken.
 
 ## Requirements and limits
 
-- **Mobile autoplay.** Mobile browsers refuse to start audio without a user
-  gesture, so a listener joining a playing room may land in muted playback and
-  need to tap once to hear it. The player retries, then falls back to muted
-  playback rather than staying silent.
+- **Everyone presses play once per session.** Browsers will not start audio the
+  person sitting there didn't ask for, and a room that was already playing when
+  the panel opened is exactly that. Chrome is the strictest about it, but every
+  browser does it. Once a listener has pressed play on the video, the GM's
+  controls drive their playback for the rest of the session. The panel detects
+  this and prompts, rather than sitting there silent.
+- **Mobile is stricter still.** Phones and tablets may land in muted playback
+  even after a press; the player retries, then falls back to muted playback
+  rather than staying silent, leaving the listener to unmute.
 - **Reordering on touch.** Drag-and-drop is a mouse interaction. The ▲/▼
   buttons on each row do the same job on a phone or from the keyboard.
 - **Concurrent edits.** Room metadata is last-write-wins. Two people changing

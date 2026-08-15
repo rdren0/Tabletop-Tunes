@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="Tabletop Tunes — music in sync with your party">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22222a"/>
+      <stop offset="1" stop-color="#15151a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8b6ff8"/>
+      <stop offset="1" stop-color="#5f3dc4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Equalizer bars, echoing the now-playing indicator in the panel. -->
+  <g fill="url(#accent)" opacity="0.9">
+    <rect x="120" y="404" width="16" height="56" rx="8"/>
+    <rect x="152" y="368" width="16" height="92" rx="8"/>
+    <rect x="184" y="330" width="16" height="130" rx="8"/>
+    <rect x="216" y="386" width="16" height="74" rx="8"/>
+    <rect x="248" y="348" width="16" height="112" rx="8"/>
+    <rect x="280" y="414" width="16" height="46" rx="8"/>
+  </g>
+
+  <!-- The mark from the extension's own icon. -->
+  <g transform="translate(120 150) scale(4.6)" fill="none" stroke="#ffffff" stroke-width="1.5"
+     stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="7" cy="17" r="3"/>
+    <circle cx="18" cy="15" r="3"/>
+    <path d="M10 17V5.4a.5.5 0 0 1 .62-.49l9 2.25a.5.5 0 0 1 .38.49V15"/>
+  </g>
+
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="460" y="290" fill="#f2f2f5" font-size="86" font-weight="700"
+          letter-spacing="-1.5">Tabletop Tunes</text>
+    <text x="464" y="352" fill="#c3b0ff" font-size="34" font-weight="500">
+      Music in sync with your party
+    </text>
+    <text x="464" y="414" fill="#9a9aa6" font-size="26">
+      Queue YouTube links · everyone hears the same moment
+    </text>
+  </g>
+
+  <rect x="0" y="618" width="1200" height="12" fill="url(#accent)"/>
+</svg>

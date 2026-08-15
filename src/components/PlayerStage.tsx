@@ -21,6 +21,12 @@ interface PlayerStageProps {
    * so the panel can follow it rather than contradict it.
    */
   onAudioChange?: (audio: { volume: number; muted: boolean }) => void;
+  /**
+   * Whether this client's player is genuinely running. The room wanting
+   * playback and this browser allowing it are different things, and only the
+   * player itself knows which.
+   */
+  onLocalPlaybackChange?: (playing: boolean) => void;
   /** Whether this client may write playback state for the whole room. */
   canControl?: boolean;
   /** A GM/DJ used the player's own controls; mirror it into room state. */
@@ -46,6 +52,7 @@ export function PlayerStage({
   onTime,
   onAutoMuted,
   onAudioChange,
+  onLocalPlaybackChange,
   canControl,
   onLocalTransport,
   onPlaylistLoaded,
@@ -77,6 +84,7 @@ export function PlayerStage({
       onTime={onTime}
       onAutoMuted={onAutoMuted}
       onAudioChange={onAudioChange}
+      onLocalPlaybackChange={onLocalPlaybackChange}
       canControl={canControl}
       onLocalTransport={onLocalTransport}
       onPlaylistLoaded={onPlaylistLoaded}
@@ -100,6 +108,7 @@ function YouTubeStage({
   onTime,
   onAutoMuted,
   onAudioChange,
+  onLocalPlaybackChange,
   canControl,
   onLocalTransport,
   onPlaylistLoaded,
@@ -134,6 +143,9 @@ function YouTubeStage({
   onAutoMutedRef.current = onAutoMuted;
   const onAudioChangeRef = useRef(onAudioChange);
   onAudioChangeRef.current = onAudioChange;
+  const onLocalPlaybackChangeRef = useRef(onLocalPlaybackChange);
+  onLocalPlaybackChangeRef.current = onLocalPlaybackChange;
+  const wasRunning = useRef(false);
   const onPlaylistLoadedRef = useRef(onPlaylistLoaded);
   onPlaylistLoadedRef.current = onPlaylistLoaded;
   const lastPlaylistRef = useRef("");
@@ -282,6 +294,14 @@ function YouTubeStage({
       const playing = state === window.YT?.PlayerState.PLAYING;
       const buffering = state === window.YT?.PlayerState.BUFFERING;
       const ended = state === window.YT?.PlayerState.ENDED;
+
+      // Buffering counts: it's on its way to sound, and treating it as stopped
+      // would flash the "press play" prompt at the start of every track.
+      const runningNow = playing || buffering;
+      if (runningNow !== wasRunning.current) {
+        wasRunning.current = runningNow;
+        onLocalPlaybackChangeRef.current?.(runningNow);
+      }
 
       if (!isPlayingRef.current) {
         // Nobody may start playback the room hasn't, so a paused room is

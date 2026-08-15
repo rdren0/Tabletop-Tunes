@@ -81,6 +81,10 @@ export default function App() {
   // This client's live playback position, kept out of state so the 2s
   // heartbeat doesn't re-render the whole popover.
   const positionRef = useRef(0);
+  // Whether this browser is actually producing audio, which is not the same as
+  // the room wanting it to.
+  const [localPlaying, setLocalPlaying] = useState(false);
+  const [needsGesture, setNeedsGesture] = useState(false);
   /** Unmute inside the click itself, then let state follow. */
   function unmuteNow() {
     unmuteAll();
@@ -161,6 +165,23 @@ export default function App() {
   // ones are hanging around purely as feedback for the person who asked.
   const pendingRequests = room.requests.filter((r) => requestStatusOf(r) === "pending");
   const myRequests = playerId ? room.requests.filter((r) => r.requestedById === playerId) : [];
+
+  /**
+   * Chrome (and every other browser) refuses to start audio that no one asked
+   * for, and a room that was already playing when you opened the panel is
+   * exactly that. The prompt only appears once playback has genuinely failed
+   * to start — waiting a few seconds first, so an ordinary buffer at the top
+   * of a track doesn't flash it.
+   */
+  useEffect(() => {
+    if (!room.isPlaying || !currentItem || localPlaying) {
+      setNeedsGesture(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setNeedsGesture(true), 5000);
+    return () => window.clearTimeout(timer);
+  }, [room.isPlaying, currentItem, localPlaying]);
+
 
   // Long tracks drift, so the client driving the queue republishes its position
   // periodically. Exactly one writer, same as auto-advance.
@@ -439,6 +460,7 @@ export default function App() {
             setMuted(true);
             setAutoMuted(true);
           }}
+          onLocalPlaybackChange={setLocalPlaying}
           onAudioChange={({ volume: next, muted: nextMuted }) => {
             setVolume(next);
             setMuted(nextMuted);
@@ -548,7 +570,19 @@ export default function App() {
         )}
       </div>
 
-      {autoMuted && muted && (
+      {/* The browser is refusing to start audio nobody asked for. Ranked above
+          the auto-mute hint because it's the earlier failure: there is no point
+          telling someone to unmute a player that isn't running. */}
+      {needsGesture && (
+        <p className="notice notice--action">
+          <span>
+            <strong>Press play on the video to join the music.</strong> Your browser won't start
+            audio on its own, so each person needs to do this once per session — after that the
+            GM's controls drive your playback.
+          </span>
+        </p>
+      )}
+      {!needsGesture && autoMuted && muted && (
         <p className="hint hint--dj">
           Your browser blocked audio. Tap 🔇, or tap the video itself if that doesn't take.
         </p>
