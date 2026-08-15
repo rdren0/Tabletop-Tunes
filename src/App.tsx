@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  hasPanelOpen,
   useIsGM,
   useAutoHeight,
   useObrReady,
@@ -7,6 +8,7 @@ import {
   usePlayerId,
   usePlayerName,
   useParty,
+  usePresence,
   useRoomState,
 } from "./lib/useOwlbear";
 import { parseLink } from "./lib/parseLink";
@@ -39,6 +41,7 @@ export default function App() {
   const ready = useObrReady();
   const appRef = useAutoHeight(ready);
   useObrTheme(ready);
+  usePresence(ready);
   const isGM = useIsGM(ready);
   const playerId = usePlayerId(ready);
   const playerName = usePlayerName(ready);
@@ -196,20 +199,24 @@ export default function App() {
   }, [showPlaylist, playlistIds]);
 
   // A decided request clears itself once its notice has had time to be read.
-  // The requester sweeps their own: they are the one client that definitely
-  // cares, and it keeps stale outcomes out of room metadata even when nobody
-  // is queueing anything else.
+  //
+  // Only the advancer sweeps. Every client writes the whole room object, so
+  // two writing at once means one silently overwrites the other; letting each
+  // requester tidy up on a timer put unattended writers in the room, which is
+  // the worst kind — nobody is watching when they clobber something. This is
+  // the client that already owns auto-advance and the anchor republish.
   useEffect(() => {
-    const mine = myRequests.filter((r) => requestStatusOf(r) !== "pending");
-    if (mine.length === 0) return;
-    const due = Math.min(...mine.map((r) => r.resolvedAt ?? 0)) + REQUEST_RESULT_TTL_MS - Date.now();
+    const resolved = room.requests.filter((r) => requestStatusOf(r) !== "pending");
+    if (resolved.length === 0 || !isAdvancer()) return;
+    const due =
+      Math.min(...resolved.map((r) => r.resolvedAt ?? 0)) + REQUEST_RESULT_TTL_MS - Date.now();
     const timer = window.setTimeout(
       () => patchRoom({ requests: pruneRequests(room.requests) }),
       Math.max(due, 0)
     );
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room.requests, playerId]);
+  }, [room.requests, playerId, isGM, isDJ, party]);
 
   function setDJ(id: string, granted: boolean) {
     if (!isGM) return;
@@ -336,17 +343,24 @@ export default function App() {
   /**
    * Exactly one client drives the queue forward, otherwise every controller
    * would skip on the same "ended" event and jump several tracks at once. The
-   * GM owns that job; if no GM is connected the lowest-sorted connected DJ
-   * takes over, so the list keeps playing instead of stalling.
+   * GM owns that job; if no GM is running the panel, the lowest-sorted DJ who
+   * is takes over, so the list keeps playing instead of stalling.
+   *
+   * Elected on who has the panel *open*, not who is in the room. Owlbear
+   * destroys the iframe when the popover closes, so a GM sitting in the room
+   * with the panel shut can't advance anything — and testing role alone made
+   * every DJ stand down for them, which stopped the queue dead at the end of
+   * a track.
    */
   function isAdvancer(): boolean {
+    // This client is running by definition; nothing else to check.
     if (isGM) return true;
-    if (party.some((p) => p.role === "GM")) return false;
+    if (party.some((p) => p.role === "GM" && hasPanelOpen(p))) return false;
     if (!playerId || !isDJ) return false;
-    const connectedDjs = [playerId, ...party.map((p) => p.id)]
+    const runningDjs = [playerId, ...party.filter(hasPanelOpen).map((p) => p.id)]
       .filter((id) => room.djIds.includes(id))
       .sort();
-    return connectedDjs[0] === playerId;
+    return runningDjs[0] === playerId;
   }
 
   function handleEnded() {

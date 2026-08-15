@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import OBR from "@owlbear-rodeo/sdk";
+import OBR, { Player } from "@owlbear-rodeo/sdk";
 import { EMPTY_ROOM_STATE, ROOM_METADATA_KEY, RoomState } from "../types";
 
 /** True once the extension is confirmed to be running inside Owlbear Rodeo. */
@@ -73,8 +73,22 @@ export function useObrTheme(ready: boolean) {
 
 /** Smallest sensible popover, so a momentarily empty panel isn't a sliver. */
 const MIN_POPOVER_HEIGHT = 180;
-/** Beyond this the panel stops growing and its queue scrolls instead. */
-const MAX_POPOVER_HEIGHT = 900;
+
+/**
+ * How tall the popover may grow. Derived from the screen rather than a fixed
+ * number, because a fixed ceiling turns into a scrollbar the moment the panel
+ * needs more room — which is exactly the thing sizing-to-content is meant to
+ * avoid. The margin leaves space for Owlbear's own chrome and the browser's.
+ *
+ * `screen.availHeight` is readable from inside the iframe; `window.innerHeight`
+ * is not useful here, since that's the popover's current height, not the room
+ * available to it.
+ */
+function maxPopoverHeight(): number {
+  const screenHeight = window.screen?.availHeight;
+  if (!screenHeight) return 900;
+  return Math.max(MIN_POPOVER_HEIGHT, screenHeight - 160);
+}
 
 /**
  * Sizes the action popover to whatever the panel actually needs. The manifest
@@ -94,7 +108,7 @@ export function useAutoHeight(ready: boolean) {
     let last = 0;
     const observer = new ResizeObserver(() => {
       const measured = Math.ceil(element.getBoundingClientRect().height);
-      const height = Math.min(Math.max(measured, MIN_POPOVER_HEIGHT), MAX_POPOVER_HEIGHT);
+      const height = Math.min(Math.max(measured, MIN_POPOVER_HEIGHT), maxPopoverHeight());
       // Each call is a round trip through Owlbear, and the embed's
       // aspect-ratio box produces sub-pixel churn on every reflow.
       if (Math.abs(height - last) < 2) return;
@@ -113,6 +127,45 @@ export interface PartyMember {
   id: string;
   name: string;
   role: "GM" | "PLAYER";
+  /** Epoch ms this player's panel last checked in, or null if it never has. */
+  presentAt: number | null;
+}
+
+/**
+ * Being in the room and having this panel open are different things — Owlbear
+ * destroys the extension's iframe whenever the popover is closed. Anything that
+ * needs a client to actually be *running* (advancing the queue, tidying up
+ * metadata) has to know which is which.
+ *
+ * Presence lives in each player's own metadata rather than the shared room key,
+ * so these frequent writes can't collide with anyone else's.
+ */
+const PRESENCE_KEY = "rodeo.tabletoptunes/presence";
+const PRESENCE_INTERVAL_MS = 15_000;
+/** Three missed beats before a client counts as gone. */
+export const PRESENCE_TTL_MS = 50_000;
+
+/** Whether a party member's panel is open and running right now. */
+export function hasPanelOpen(member: PartyMember): boolean {
+  return member.presentAt !== null && Date.now() - member.presentAt < PRESENCE_TTL_MS;
+}
+
+/** Publishes this client's own presence for as long as the panel is open. */
+export function usePresence(ready: boolean) {
+  useEffect(() => {
+    if (!ready) return;
+    const beat = () => {
+      OBR.player.setMetadata({ [PRESENCE_KEY]: Date.now() }).catch(() => {});
+    };
+    beat();
+    const timer = window.setInterval(beat, PRESENCE_INTERVAL_MS);
+    return () => {
+      window.clearInterval(timer);
+      // Best-effort: the popover closing destroys this frame, so the write may
+      // not land. The TTL is what actually guarantees the mark expires.
+      OBR.player.setMetadata({ [PRESENCE_KEY]: undefined }).catch(() => {});
+    };
+  }, [ready]);
 }
 
 /** Every other connected player in the room (excludes the local client). */
@@ -121,10 +174,20 @@ export function useParty(ready: boolean): PartyMember[] {
   useEffect(() => {
     if (!ready) return;
     let unsubscribed = false;
+    const toMembers = (players: Player[]): PartyMember[] =>
+      players.map((p) => {
+        const beat = p.metadata?.[PRESENCE_KEY];
+        return {
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          presentAt: typeof beat === "number" ? beat : null,
+        };
+      });
     OBR.party.getPlayers().then((players) => {
-      if (!unsubscribed) setParty(players);
+      if (!unsubscribed) setParty(toMembers(players));
     });
-    return OBR.party.onChange((players) => setParty(players));
+    return OBR.party.onChange((players) => setParty(toMembers(players)));
   }, [ready]);
   return party;
 }
