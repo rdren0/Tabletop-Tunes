@@ -62,6 +62,25 @@ export default function App() {
   const [muted, setMuted] = useState(
     () => storedPrefs.current?.muted ?? DEFAULT_AUDIO_PREFS.muted
   );
+  // Where the thumb sits, which is not the same thing as the volume: the curve
+  // is many-to-one, so several positions produce the same level. Deriving the
+  // thumb from the volume instead rounds it out from under the finger dragging
+  // it — worst at the quiet end, where a third of the track shares a handful
+  // of volumes, and the thumb springing back reads as the control refusing.
+  const [sliderPos, setSliderPos] = useState(() => {
+    const prefs = storedPrefs.current ?? DEFAULT_AUDIO_PREFS;
+    return volumeToSlider(prefs.muted ? 0 : prefs.volume);
+  });
+  // The volume also changes from places that are not this track: the embed's
+  // own speaker, an unmute, the stored preference arriving late. Follow those.
+  // A position that already produces the current level is left exactly where
+  // it is, which is what keeps the thumb still while it is being dragged.
+  useEffect(() => {
+    const target = muted ? 0 : volume;
+    if (sliderToVolume(sliderPos) === target) return;
+    setSliderPos(volumeToSlider(target));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volume, muted]);
   // True when the browser refused audio and playback started muted, so the
   // speaker button can be explained rather than just looking wrong.
   const [autoMuted, setAutoMuted] = useState(false);
@@ -563,13 +582,15 @@ export default function App() {
             type="range"
             min={0}
             max={100}
-            value={volumeToSlider(muted ? 0 : volume)}
+            value={sliderPos}
             aria-label="Volume"
             /* Otherwise a screen reader announces the curve's position rather
                than the volume the number beside it is showing. */
             aria-valuetext={`${muted ? 0 : volume}%`}
             onChange={(e) => {
-              const next = sliderToVolume(Number(e.target.value));
+              const position = Number(e.target.value);
+              const next = sliderToVolume(position);
+              setSliderPos(position);
               setVolume(next);
               // Moving the slider is itself an intent to hear something —
               // unless it was moved to the stop, which is the opposite.

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { EchoState, initialEcho, observed, pushed } from "../lib/embedVolume";
 import { hasGestured, registerUnmuteTarget } from "../lib/audioGestures";
 import { loadScriptOnce } from "../lib/loadScript";
 import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
@@ -127,6 +128,14 @@ function YouTubeStage({
   volumeRef.current = volume;
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
+  // What the embed made of the volume we last handed it. See lib/embedVolume:
+  // its own number, not ours, is what a later read-back has to be judged
+  // against.
+  const echo = useRef<EchoState>(initialEcho);
+  // The player has run past its last frame. There is nothing to sync to there,
+  // and the room asking for this same track again is the queue coming back
+  // round onto it.
+  const ended = useRef(false);
 
   function requestPlay() {
     lastPlayRequest.current = Date.now();
@@ -195,7 +204,7 @@ function YouTubeStage({
         userUnmuted.current = true;
         stalledTicks.current = 0;
         player.unMute?.();
-        player.setVolume?.(volumeRef.current);
+        pushVolume(player);
         if (!isPlayingRef.current) return;
         player.playVideo();
         // Unmuting can make the browser pause a moment later, since the API
@@ -253,6 +262,15 @@ function YouTubeStage({
   // Correct as soon as a new anchor arrives, which also covers late joiners.
   useEffect(() => {
     if (!readyRef.current) return;
+    // A player sitting past its last frame has nothing to sync to — seeking it
+    // does nothing, and it is not going to start on its own. A fresh anchor
+    // for the track it just finished is the room asking for that track again,
+    // which is what a queue of one looping does, so load it over. Nothing else
+    // covers this: the item is unchanged, so the load below sees no new key.
+    if (ended.current && isPlaying) {
+      loadCurrentItem();
+      return;
+    }
     syncToAnchor();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorPosition, anchorAt, isPlaying]);
@@ -275,13 +293,12 @@ function YouTubeStage({
       const livedVolume = player.getVolume?.();
       const livedMuted = player.isMuted?.();
       if (typeof livedVolume === "number" && typeof livedMuted === "boolean") {
-        // A rounding difference isn't someone moving a slider. The embed can
-        // report a step either side of what it was handed, and treating that
-        // as an adjustment pushed the listener's own volume back up every
-        // couple of seconds — most obviously at the quiet end, where a step is
-        // the difference between audible and not.
+        // Judged against the embed's echo of our own last push rather than
+        // against our number: it does not keep what it is given, and at the
+        // quiet end the difference is several steps. See lib/embedVolume.
         const lived = Math.round(livedVolume);
-        const volumeMoved = Math.abs(lived - volumeRef.current) > 1;
+        const { state, moved: volumeMoved } = observed(echo.current, lived, Date.now());
+        echo.current = state;
         if (volumeMoved || livedMuted !== mutedRef.current) {
           onAudioChangeRef.current?.({
             // A mute reported on its own says nothing about the volume, so
@@ -363,11 +380,21 @@ function YouTubeStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Every route that sets the volume goes through here, so nothing reaches the
+   * embed that the heartbeat could then read back and mistake for the listener
+   * working YouTube's own speaker.
+   */
+  function pushVolume(player: YTPlayer) {
+    player.setVolume?.(volumeRef.current);
+    echo.current = pushed(Date.now());
+  }
+
   /** Push the current audio settings at the player, whenever it's able to take them. */
   function applyAudio() {
     const player = playerRef.current;
     if (!player) return;
-    player.setVolume?.(volumeRef.current);
+    pushVolume(player);
     if (mutedRef.current) player.mute?.();
     else player.unMute?.();
   }
@@ -411,10 +438,21 @@ function YouTubeStage({
             const YT = window.YT;
             if (!YT) return;
             if (e.data === YT.PlayerState.ENDED) {
+              // A playlist item is many videos, and the embed walks them
+              // itself. Only the end of the last one is the queue's turn
+              // finishing; ending anywhere earlier would skip the rest of a
+              // playlist after its first track.
+              if (itemRef.current.link.kind === "playlist") {
+                const ids = e.target.getPlaylist?.() ?? null;
+                const index = e.target.getPlaylistIndex?.() ?? -1;
+                if (ids && index > -1 && index < ids.length - 1) return;
+              }
+              ended.current = true;
               onEndedRef.current();
               return;
             }
             if (e.data === YT.PlayerState.PLAYING) {
+              ended.current = false;
               userPaused.current = false;
               playingSince.current = Date.now();
               // A GM or DJ pressing YouTube's own play button is a real user
@@ -469,6 +507,7 @@ function YouTubeStage({
     // nothing blares for a moment before the reconcile pauses it again.
     const shouldPlay = isPlayingRef.current && mayStart();
     lastLoadAt.current = Date.now();
+    ended.current = false;
     if (link.kind === "playlist") {
       if (shouldPlay) player.loadPlaylist({ list: link.mediaId });
       else player.cuePlaylist?.({ list: link.mediaId });
