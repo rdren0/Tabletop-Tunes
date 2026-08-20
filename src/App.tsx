@@ -31,7 +31,7 @@ import {
   savePlayerPrefs,
   savePrefs,
 } from "./lib/preferences";
-import { sliderToVolume, volumeToSlider } from "./lib/volumeCurve";
+import { MAX_SLIDER, sliderToVolume, volumeToSlider } from "./lib/volumeCurve";
 
 /** Where questions, bugs and requests go. Mirrored in the manifest's homepage_url. */
 const ISSUES_URL = "https://github.com/rdren0/Tabletop-Tunes/issues";
@@ -62,25 +62,6 @@ export default function App() {
   const [muted, setMuted] = useState(
     () => storedPrefs.current?.muted ?? DEFAULT_AUDIO_PREFS.muted
   );
-  // Where the thumb sits, which is not the same thing as the volume: the curve
-  // is many-to-one, so several positions produce the same level. Deriving the
-  // thumb from the volume instead rounds it out from under the finger dragging
-  // it — worst at the quiet end, where a third of the track shares a handful
-  // of volumes, and the thumb springing back reads as the control refusing.
-  const [sliderPos, setSliderPos] = useState(() => {
-    const prefs = storedPrefs.current ?? DEFAULT_AUDIO_PREFS;
-    return volumeToSlider(prefs.muted ? 0 : prefs.volume);
-  });
-  // The volume also changes from places that are not this track: the embed's
-  // own speaker, an unmute, the stored preference arriving late. Follow those.
-  // A position that already produces the current level is left exactly where
-  // it is, which is what keeps the thumb still while it is being dragged.
-  useEffect(() => {
-    const target = muted ? 0 : volume;
-    if (sliderToVolume(sliderPos) === target) return;
-    setSliderPos(volumeToSlider(target));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [volume, muted]);
   // True when the browser refused audio and playback started muted, so the
   // speaker button can be explained rather than just looking wrong.
   const [autoMuted, setAutoMuted] = useState(false);
@@ -575,22 +556,20 @@ export default function App() {
           >
             {muted || volume === 0 ? "🔇" : "🔊"}
           </button>
-          {/* The track carries slider positions, not volumes: see
+          {/* The track carries rungs of the volume ladder, not volumes: see
               lib/volumeCurve. Everything either side of this input — state,
               storage, the player — is in plain 0-100 volume. */}
           <input
             type="range"
             min={0}
-            max={100}
-            value={sliderPos}
+            max={MAX_SLIDER}
+            value={volumeToSlider(muted ? 0 : volume)}
             aria-label="Volume"
             /* Otherwise a screen reader announces the curve's position rather
                than the volume the number beside it is showing. */
             aria-valuetext={`${muted ? 0 : volume}%`}
             onChange={(e) => {
-              const position = Number(e.target.value);
-              const next = sliderToVolume(position);
-              setSliderPos(position);
+              const next = sliderToVolume(Number(e.target.value));
               setVolume(next);
               // Moving the slider is itself an intent to hear something —
               // unless it was moved to the stop, which is the opposite.
