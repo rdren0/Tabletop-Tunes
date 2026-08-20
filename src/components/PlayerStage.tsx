@@ -275,11 +275,18 @@ function YouTubeStage({
       const livedVolume = player.getVolume?.();
       const livedMuted = player.isMuted?.();
       if (typeof livedVolume === "number" && typeof livedMuted === "boolean") {
-        // A rounding difference isn't someone moving a slider.
-        const volumeMoved = Math.abs(livedVolume - volumeRef.current) >= 1;
+        // A rounding difference isn't someone moving a slider. The embed can
+        // report a step either side of what it was handed, and treating that
+        // as an adjustment pushed the listener's own volume back up every
+        // couple of seconds — most obviously at the quiet end, where a step is
+        // the difference between audible and not.
+        const lived = Math.round(livedVolume);
+        const volumeMoved = Math.abs(lived - volumeRef.current) > 1;
         if (volumeMoved || livedMuted !== mutedRef.current) {
           onAudioChangeRef.current?.({
-            volume: Math.round(livedVolume),
+            // A mute reported on its own says nothing about the volume, so
+            // don't let the embed's rounding ride along with it.
+            volume: volumeMoved ? lived : volumeRef.current,
             muted: livedMuted,
           });
         }

@@ -25,11 +25,13 @@ import {
 import {
   AudioPrefs,
   DEFAULT_AUDIO_PREFS,
+  DEFAULT_VOLUME,
   loadLocalPrefs,
   loadPlayerPrefs,
   savePlayerPrefs,
   savePrefs,
 } from "./lib/preferences";
+import { sliderToVolume, volumeToSlider } from "./lib/volumeCurve";
 
 /** Where questions, bugs and requests go. Mirrored in the manifest's homepage_url. */
 const ISSUES_URL = "https://github.com/rdren0/Tabletop-Tunes/issues";
@@ -85,12 +87,21 @@ export default function App() {
   // the room wanting it to.
   const [localPlaying, setLocalPlaying] = useState(false);
   const [needsGesture, setNeedsGesture] = useState(false);
-  /** Unmute inside the click itself, then let state follow. */
-  function unmuteNow() {
+  /**
+   * Unmute inside the click itself, then let state follow. `level` is for
+   * callers that are unmuting *and* setting a volume in the same act, since
+   * this runs before that state has landed.
+   */
+  function unmuteNow(level = volume) {
+    // Unmuting into a volume of zero leaves the listener every bit as silent,
+    // with a speaker icon claiming otherwise and nothing to suggest the slider
+    // is the thing still holding them down.
+    const next = level > 0 ? level : DEFAULT_VOLUME;
     unmuteAll();
+    setVolume(next);
     setMuted(false);
     setAutoMuted(false);
-    rememberAudio({ volume, muted: false });
+    rememberAudio({ volume: next, muted: false });
   }
 
   /**
@@ -545,19 +556,30 @@ export default function App() {
           >
             {muted || volume === 0 ? "🔇" : "🔊"}
           </button>
+          {/* The track carries slider positions, not volumes: see
+              lib/volumeCurve. Everything either side of this input — state,
+              storage, the player — is in plain 0-100 volume. */}
           <input
             type="range"
             min={0}
             max={100}
-            value={muted ? 0 : volume}
+            value={volumeToSlider(muted ? 0 : volume)}
+            aria-label="Volume"
+            /* Otherwise a screen reader announces the curve's position rather
+               than the volume the number beside it is showing. */
+            aria-valuetext={`${muted ? 0 : volume}%`}
             onChange={(e) => {
-              const next = Number(e.target.value);
+              const next = sliderToVolume(Number(e.target.value));
               setVolume(next);
-              // Moving the slider is itself an intent to hear something.
-              if (muted) unmuteNow();
-              rememberAudio({ volume: next, muted: false });
+              // Moving the slider is itself an intent to hear something —
+              // unless it was moved to the stop, which is the opposite.
+              if (muted && next > 0) unmuteNow(next);
+              else rememberAudio({ volume: next, muted });
             }}
           />
+          <span className="volume-readout" aria-hidden="true">
+            {muted ? 0 : volume}%
+          </span>
         </div>
         {isGM && (
           <button

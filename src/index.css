@@ -256,14 +256,16 @@ body {
   color: var(--text-dim);
 }
 
+/* Takes a row of its own rather than the ~70px left over beside the transport
+   buttons. At that width one pixel of track covered more than one step, which
+   put the quiet end of the range out of reach entirely — you could only drag
+   from "too loud" to silence. */
 .volume {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
   font-size: 14px;
-  /* Shrink to whatever space is left instead of pushing the row wider. */
-  flex: 1 1 110px;
+  flex: 1 1 100%;
   min-width: 0;
 }
 
@@ -271,6 +273,18 @@ body {
   flex: 1;
   min-width: 0;
   accent-color: var(--accent);
+}
+
+/* Fixed width and tabular figures: the number sits at the end of the track,
+   and a track that resized as the digits changed would drag the thumb out
+   from under the cursor mid-slide. */
+.volume-readout {
+  flex-shrink: 0;
+  min-width: 4ch;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
 }
 
 .hint {
