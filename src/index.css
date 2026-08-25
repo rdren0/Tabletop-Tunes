@@ -297,6 +297,10 @@ body {
   color: var(--accent-fg);
 }
 
+/* Rides the transport row with the play and clear buttons, pushed to the far
+   end by the auto margin — it configures the room rather than driving it, so
+   it sits apart from the controls that do. The volume below claims a whole
+   line of its own, which is what ends this row. */
 .dj-toggle {
   font-size: 15px;
   padding: 6px 8px;
@@ -306,6 +310,7 @@ body {
   color: inherit;
   cursor: pointer;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .dj-toggle--open {

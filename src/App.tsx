@@ -540,6 +540,15 @@ export default function App() {
                 : "♪ Now playing"}
           </span>
         )}
+        {isGM && (
+          <button
+            className={showDjPanel ? "dj-toggle dj-toggle--open" : "dj-toggle"}
+            onClick={() => setShowDjPanel((v) => !v)}
+            title="Manage who can control the music (GM only)"
+          >
+            ⚙
+          </button>
+        )}
         <div className="volume">
           <button
             type="button"
@@ -581,15 +590,6 @@ export default function App() {
             {muted ? 0 : volume}%
           </span>
         </div>
-        {isGM && (
-          <button
-            className={showDjPanel ? "dj-toggle dj-toggle--open" : "dj-toggle"}
-            onClick={() => setShowDjPanel((v) => !v)}
-            title="Manage who can control the music (GM only)"
-          >
-            ⚙
-          </button>
-        )}
       </div>
 
       {/* The browser is refusing to start audio nobody asked for. Ranked above
