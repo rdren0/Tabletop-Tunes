@@ -28,6 +28,13 @@ interface PlayerStageProps {
    * player itself knows which.
    */
   onLocalPlaybackChange?: (playing: boolean) => void;
+  /**
+   * Whether the room started playback while this client was watching, rather
+   * than this panel opening onto a room already mid-track. Decided in App,
+   * because this component doesn't exist while the queue is empty and so can't
+   * see the change that adding a first track makes.
+   */
+  roomStarted?: boolean;
   /** Whether this client may write playback state for the whole room. */
   canControl?: boolean;
   /** A GM/DJ used the player's own controls; mirror it into room state. */
@@ -54,6 +61,7 @@ export function PlayerStage({
   onAutoMuted,
   onAudioChange,
   onLocalPlaybackChange,
+  roomStarted,
   canControl,
   onLocalTransport,
   onPlaylistLoaded,
@@ -86,6 +94,7 @@ export function PlayerStage({
       onAutoMuted={onAutoMuted}
       onAudioChange={onAudioChange}
       onLocalPlaybackChange={onLocalPlaybackChange}
+      roomStarted={roomStarted}
       canControl={canControl}
       onLocalTransport={onLocalTransport}
       onPlaylistLoaded={onPlaylistLoaded}
@@ -110,6 +119,7 @@ function YouTubeStage({
   onAutoMuted,
   onAudioChange,
   onLocalPlaybackChange,
+  roomStarted,
   canControl,
   onLocalTransport,
   onPlaylistLoaded,
@@ -180,14 +190,12 @@ function YouTubeStage({
   // decision if it interrupts real playback; otherwise it's the browser
   // refusing, and mirroring that would stop the whole room.
   const playingSince = useRef(0);
-  // True once the room has *started* playback while this client was watching.
-  // Arriving to find a room already playing does not count.
-  const roomStarted = useRef(false);
-  const firstTransportRun = useRef(true);
+  const roomStartedRef = useRef(roomStarted);
+  roomStartedRef.current = roomStarted;
 
   /** Playback may only begin from a deliberate act, not from simply being here. */
   function mayStart(): boolean {
-    return hasGestured() || roomStarted.current;
+    return hasGestured() || !!roomStartedRef.current;
   }
 
   const canControlRef = useRef(canControl);
@@ -543,15 +551,14 @@ function YouTubeStage({
   // React to play/pause toggles the GM or a DJ made for the whole room.
   useEffect(() => {
     if (!readyRef.current) return;
-    // The first run is this client mounting, not the room doing anything —
-    // finding a room mid-track must not start audio on its own.
-    if (firstTransportRun.current) {
-      firstTransportRun.current = false;
-      if (isPlaying) return;
-    }
-    // A fresh play from the room clears any local stop.
     if (isPlaying) {
-      roomStarted.current = true;
+      // Finding a room already mid-track must not start audio on its own —
+      // `mayStart` is what separates that from the room starting just now.
+      // Note this can't lean on "is this the first run": the effect's first
+      // run happens before the player is ready and returns above, so the guard
+      // would instead fall on the first real change and swallow it.
+      if (!mayStart()) return;
+      // A fresh play from the room clears any local stop.
       userPaused.current = false;
       stalledTicks.current = 0;
       requestPlay();
@@ -559,7 +566,7 @@ function YouTubeStage({
       playerRef.current?.pauseVideo();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying]);
+  }, [isPlaying, roomStarted]);
 
   // Volume and mute are per-client, never shared through room metadata.
   useEffect(() => {

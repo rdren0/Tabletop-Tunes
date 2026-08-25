@@ -32,6 +32,7 @@ import {
   savePrefs,
 } from "./lib/preferences";
 import { MAX_SLIDER, sliderToVolume, volumeToSlider } from "./lib/volumeCurve";
+import { initialWatch, observedRoom } from "./lib/roomStart";
 
 /** Where questions, bugs and requests go. Mirrored in the manifest's homepage_url. */
 const ISSUES_URL = "https://github.com/rdren0/Tabletop-Tunes/issues";
@@ -48,7 +49,7 @@ export default function App() {
   const playerId = usePlayerId(ready);
   const playerName = usePlayerName(ready);
   const party = useParty(ready);
-  const [room, patchRoom] = useRoomState(ready);
+  const [room, patchRoom, roomLoaded] = useRoomState(ready);
   const [inputValue, setInputValue] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -176,6 +177,17 @@ export default function App() {
   // ones are hanging around purely as feedback for the person who asked.
   const pendingRequests = room.requests.filter((r) => requestStatusOf(r) === "pending");
   const myRequests = playerId ? room.requests.filter((r) => r.requestedById === playerId) : [];
+
+  /**
+   * Whether the room started playback while this client was watching — see
+   * lib/roomStart for why the player embed can't work that out for itself.
+   * Watched here, where the room's state stream runs whether or not anything
+   * is mounted.
+   */
+  const [startWatch, setStartWatch] = useState(initialWatch);
+  useEffect(() => {
+    setStartWatch((watch) => observedRoom(watch, { loaded: roomLoaded, isPlaying: room.isPlaying }));
+  }, [roomLoaded, room.isPlaying]);
 
   /**
    * Chrome (and every other browser) refuses to start audio that no one asked
@@ -460,6 +472,7 @@ export default function App() {
         <PlayerStage
           item={currentItem}
           isPlaying={room.isPlaying}
+          roomStarted={startWatch.started}
           volume={volume}
           muted={muted}
           anchorPosition={room.anchorPosition}

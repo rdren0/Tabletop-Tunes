@@ -182,11 +182,17 @@ export function useParty(ready: boolean): PartyMember[] {
  *
  * State is split across several metadata keys by concern — see roomMetadata.ts
  * — so writes about different things cannot discard one another.
+ *
+ * The third element is false until the room's own metadata has actually been
+ * read. Before that the state is the empty default, which reads as a paused,
+ * empty room — indistinguishable from the real thing, and anything deciding
+ * whether the room *changed* has to be able to tell those apart.
  */
 export function useRoomState(
   ready: boolean
-): [RoomState, (patch: Partial<RoomState>) => void] {
+): [RoomState, (patch: Partial<RoomState>) => void, boolean] {
   const [state, setState] = useState<RoomState>(EMPTY_ROOM_STATE);
+  const [loaded, setLoaded] = useState(false);
   // Track the latest state locally so rapid patches (e.g. add-to-queue then
   // immediately play) don't race against the async round-trip to room metadata.
   const latest = useRef<RoomState>(EMPTY_ROOM_STATE);
@@ -204,6 +210,7 @@ export function useRoomState(
       const merged = readRoomState(metadata);
       latest.current = merged;
       setState(merged);
+      setLoaded(true);
     });
 
     return OBR.room.onMetadataChange((metadata) => {
@@ -211,6 +218,7 @@ export function useRoomState(
       const merged = readRoomState(metadata);
       latest.current = merged;
       setState(merged);
+      setLoaded(true);
     });
   }, [ready]);
 
@@ -224,5 +232,5 @@ export function useRoomState(
     OBR.room.setMetadata(metadataUpdateFor(next, patch, migrating));
   }
 
-  return [state, patchState];
+  return [state, patchState, loaded];
 }
