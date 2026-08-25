@@ -411,24 +411,35 @@ function YouTubeStage({
       });
       if (cancelled || !containerRef.current || !window.YT) return;
 
-      // The YouTube API replaces the element it's given. Hand it a detached
-      // child React never rendered, so React isn't left trying to remove a
-      // node that no longer exists (which throws and blanks the whole app).
-      const mount = document.createElement("div");
-      containerRef.current.appendChild(mount);
+      // Built by hand rather than left to the API: `allow` is only read when
+      // the frame loads, so delegating autoplay from onReady — after YouTube
+      // has already navigated it — never granted the permission at all. The
+      // ambience layers were fixed the same way; this one was missed.
+      const frame = document.createElement("iframe");
+      frame.title = "Tabletop Tunes player";
+      frame.allow = "autoplay; encrypted-media";
+      frame.width = "100%";
+      frame.height = "100%";
+      frame.style.border = "0";
+      const params = new URLSearchParams({
+        enablejsapi: "1",
+        playsinline: "1",
+        origin: window.location.origin,
+      });
+      // Only decides what the frame boots with — onReady loads or cues
+      // whatever is current regardless. A playlist embed is addressed through
+      // the videoseries path rather than by id.
+      const { link } = itemRef.current;
+      if (link.kind === "playlist") params.set("list", link.mediaId);
+      const path = link.kind === "playlist" ? "videoseries" : link.mediaId;
+      frame.src = `https://www.youtube.com/embed/${path}?${params}`;
+      containerRef.current.appendChild(frame);
 
-      playerRef.current = new window.YT.Player(mount, {
-        width: "100%",
-        height: "100%",
-        playerVars: { playsinline: 1 },
+      playerRef.current = new window.YT.Player(frame, {
         events: {
           onReady: () => {
             readyRef.current = true;
             readyAt.current = Date.now();
-            // A nested iframe only gets autoplay permission if every ancestor
-            // delegates it; harmless when the host frame doesn't.
-            const frame = playerRef.current?.getIframe?.();
-            if (frame) frame.allow = "autoplay; encrypted-media";
             // Apply audio settings here too: the player ignores them until it
             // exists, so anything set before this point never reached it.
             applyAudio();
