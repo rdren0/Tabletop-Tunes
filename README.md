@@ -14,6 +14,10 @@ the toolbar.
 [`https://tabletop-tunes.com/manifest.json`](https://tabletop-tunes.com/manifest.json)
 in Owlbear Rodeo under your profile menu → Add Extension.
 
+<img src="public/screenshots/dm-playlist-multiple.png"
+     alt="The GM's panel: a cued track, transport controls, and a queue of three songs"
+     width="360">
+
 ## What it does
 
 **A shared queue.** YouTube videos and playlists, pasted as links. Whoever is
@@ -30,9 +34,31 @@ individual players, giving them the same transport and queue control. Everyone
 else listens: they see the queue and what's playing, but the controls are
 theirs to watch, not touch.
 
+<table>
+  <tr>
+    <td><img src="public/screenshots/dm-player-dj-add.png"
+             alt="The GM's DJ privileges panel, with a Make DJ button beside a player's name"
+             width="320"></td>
+    <td><img src="public/screenshots/player-dj-access-granted.png"
+             alt="The same player's panel once granted, now with the queue and transport controls"
+             width="320"></td>
+  </tr>
+  <tr>
+    <td><em>The GM hands out the aux cable…</em></td>
+    <td><em>…and the player gets the controls.</em></td>
+  </tr>
+</table>
+
 **Song requests.** Listeners can propose a track. A GM or DJ approves or
 declines it, and the person who asked is told which happened rather than
 watching their request quietly disappear.
+
+<img src="public/screenshots/player-playlist-multiple.png"
+     alt="A listener's panel: the queue, their own volume, the request box, and why the room is quiet"
+     width="360">
+
+A listener's panel, above: the same queue, their own volume, a box to request a
+track — and, where the GM has a video, a plain statement of why it's quiet.
 
 **Per-listener audio.** Volume and mute belong to each person, not the room, and
 persist between sessions. The panel's controls and the embedded player's own
