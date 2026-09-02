@@ -4,8 +4,15 @@ An [Owlbear Rodeo](https://www.owlbear.rodeo/) extension that plays music in
 sync with your party. Paste YouTube links, build a queue, and when the GM hits
 play everyone hears the same thing at the same point in the track.
 
-**Install:** add `https://tabletop-tunes.com/manifest.json` in Owlbear Rodeo
-under your profile menu → Add Extension.
+**Site:** [tabletop-tunes.com](https://tabletop-tunes.com) — where the
+extension is hosted and what Owlbear loads into the popover. Opened directly in
+a browser it has no room to talk to, so it waits on Owlbear rather than showing
+the panel; the extension proper appears once it is installed and opened from
+the toolbar.
+
+**Install:** add
+[`https://tabletop-tunes.com/manifest.json`](https://tabletop-tunes.com/manifest.json)
+in Owlbear Rodeo under your profile menu → Add Extension.
 
 ## What it does
 
@@ -53,6 +60,9 @@ looks broken.
 
 ## Requirements and limits
 
+- **The room starts quiet.** Queueing a track cues it without starting it, and
+  a room left playing when everyone logged off opens paused. Playback begins
+  when whoever runs the room presses play, and not before.
 - **Everyone presses play once per session.** Browsers will not start audio the
   person sitting there didn't ask for, and a room that was already playing when
   the panel opened is exactly that. Chrome is the strictest about it, but every
