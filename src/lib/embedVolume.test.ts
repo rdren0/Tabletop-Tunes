@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { EchoState, initialEcho, observed, pushed, VOLUME_SETTLE_MS } from "./embedVolume";
+import {
+  EchoState,
+  initialEcho,
+  observed,
+  pushed,
+  shouldMute,
+  VOLUME_SETTLE_MS,
+} from "./embedVolume";
 
 const SETTLED = VOLUME_SETTLE_MS + 1;
 
@@ -54,5 +61,25 @@ describe("observed", () => {
   it("still forgives a step either side of the settled echo", () => {
     const { moves } = ticks(pushed(1000), [40, 41, 39, 40], 1000 + SETTLED);
     expect(moves).toEqual([]);
+  });
+});
+
+describe("shouldMute", () => {
+  it("mutes when the listener asked for mute", () => {
+    expect(shouldMute(60, true)).toBe(true);
+  });
+
+  it("mutes at the bottom of the slider, which the embed cannot hold as a volume", () => {
+    expect(shouldMute(0, false)).toBe(true);
+  });
+
+  it("leaves an audible volume alone", () => {
+    expect(shouldMute(1, false)).toBe(false);
+    expect(shouldMute(100, false)).toBe(false);
+  });
+
+  it("treats a nonsense volume as silence rather than as full blast", () => {
+    expect(shouldMute(NaN, false)).toBe(true);
+    expect(shouldMute(-5, false)).toBe(true);
   });
 });

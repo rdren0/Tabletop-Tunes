@@ -31,7 +31,13 @@ import {
   savePlayerPrefs,
   savePrefs,
 } from "./lib/preferences";
-import { MAX_SLIDER, sliderToVolume, volumeToSlider } from "./lib/volumeCurve";
+import {
+  MAX_SLIDER,
+  VOLUME_STEP_RUNGS,
+  sliderToVolume,
+  stepVolume,
+  volumeToSlider,
+} from "./lib/volumeCurve";
 import { initialWatch, observedRoom } from "./lib/roomStart";
 import { appendToQueue } from "./lib/queueAdd";
 import { isStalePlayback } from "./lib/stalePlayback";
@@ -105,6 +111,21 @@ export default function App() {
     setMuted(false);
     setAutoMuted(false);
     rememberAudio({ volume: next, muted: false });
+  }
+
+  /**
+   * One press of the quieter/louder buttons. A muted listener counts as being
+   * at the bottom of the ladder, so pressing louder walks up from silence
+   * rather than leaping back to whatever they were on before they muted.
+   */
+  function nudgeVolume(rungs: number) {
+    const next = stepVolume(muted ? 0 : volume, rungs);
+    if (muted && next > 0) {
+      unmuteNow(next);
+      return;
+    }
+    setVolume(next);
+    rememberAudio({ volume: next, muted });
   }
 
   /**
@@ -595,6 +616,21 @@ export default function App() {
           >
             {muted || volume === 0 ? "🔇" : "🔊"}
           </button>
+          {/* Steppers either side of the track. A slider is the awkward control
+              on a phone — a fingertip covers several rungs at once — and these
+              hit an exact level without a drag. They cost the track some width,
+              which is the trade: a tap that lands is worth more than a drag
+              that has to be repeated. */}
+          <button
+            type="button"
+            className="volume-step"
+            onClick={() => nudgeVolume(-VOLUME_STEP_RUNGS)}
+            disabled={muted || volume <= 0}
+            aria-label="Quieter"
+            title="Quieter"
+          >
+            −
+          </button>
           {/* The track carries rungs of the volume ladder, not volumes: see
               lib/volumeCurve. Everything either side of this input — state,
               storage, the player — is in plain 0-100 volume. */}
@@ -616,6 +652,16 @@ export default function App() {
               else rememberAudio({ volume: next, muted });
             }}
           />
+          <button
+            type="button"
+            className="volume-step"
+            onClick={() => nudgeVolume(VOLUME_STEP_RUNGS)}
+            disabled={!muted && volume >= 100}
+            aria-label="Louder"
+            title="Louder"
+          >
+            +
+          </button>
           <span className="volume-readout" aria-hidden="true">
             {muted ? 0 : volume}%
           </span>

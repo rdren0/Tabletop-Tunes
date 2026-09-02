@@ -61,3 +61,23 @@ export function volumeToSlider(volume: number): number {
   }
   return nearest;
 }
+
+/**
+ * How far one press of the quieter/louder buttons moves, in rungs.
+ *
+ * Counted in rungs rather than in volume so a press feels the same size
+ * wherever it lands: the taper means five rungs is a couple of percent down at
+ * the quiet end and a dozen up at the top, which is roughly how loudness is
+ * heard. Fifteen or so presses cross the whole range.
+ */
+export const VOLUME_STEP_RUNGS = 5;
+
+/**
+ * The volume `rungs` steps away from this one, clamped to the ends of the
+ * ladder. A slider is a poor target on a phone — a fingertip covers several
+ * rungs at once, and the popover leaves the track only a couple of hundred
+ * pixels — so the buttons beside it move in exact steps instead.
+ */
+export function stepVolume(volume: number, rungs: number): number {
+  return sliderToVolume(volumeToSlider(volume) + rungs);
+}

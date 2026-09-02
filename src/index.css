@@ -331,10 +331,47 @@ body {
   flex-shrink: 0;
 }
 
+/* Matches the mute button beside it so the row reads as one control rather
+   than a slider with oddments attached. */
+.volume-step {
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .mute:disabled,
+.volume-step:disabled,
 .volume input:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Touch. Fingertips need about 44px to land reliably, which the desktop
+   padding is nowhere near, and the track can afford to give up the room —
+   on a phone the buttons are the control that actually gets used. */
+@media (pointer: coarse) {
+  .volume {
+    gap: 8px;
+  }
+
+  .volume-step,
+  .mute {
+    font-size: 18px;
+    padding: 11px 14px;
+    min-width: 44px;
+  }
+
+  /* Taller track, so the drag can be started anywhere near it rather than
+     exactly on a few pixels of thumb. */
+  .volume input {
+    height: 32px;
+  }
 }
 
 .dj-panel {

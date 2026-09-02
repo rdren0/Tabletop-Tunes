@@ -3,6 +3,7 @@ import { loadScriptOnce } from "../lib/loadScript";
 import { hasGestured, registerGestureTarget, registerUnmuteTarget } from "../lib/audioGestures";
 import { autoplayAllowed } from "../lib/autoplayProbe";
 import { AmbienceStream } from "../types";
+import { shouldMute } from "../lib/embedVolume";
 
 interface AmbienceLayerProps {
   stream: AmbienceStream;
@@ -66,7 +67,10 @@ export function AmbienceLayer({
     if (!player) return;
     try {
       player.setVolume?.(volumeRef.current);
-      if (mutedRef.current) player.mute?.();
+      // A layer mixed down to nothing has to be muted rather than set to zero,
+      // or the unMute below hands it back the level it had — see
+      // lib/embedVolume.
+      if (shouldMute(volumeRef.current, mutedRef.current)) player.mute?.();
       else player.unMute?.();
     } catch {
       // Not accepting calls yet; the heartbeat retries.
@@ -199,8 +203,11 @@ export function AmbienceLayer({
       registerUnmuteTarget(() => {
         const player = playerRef.current;
         if (!player) return;
-        player.unMute?.();
         player.setVolume?.(volumeRef.current);
+        // The gesture unmutes the browser, not this layer: one sitting at zero
+        // in the mix must stay silent through it.
+        if (shouldMute(volumeRef.current, mutedRef.current)) player.mute?.();
+        else player.unMute?.();
         if (wantPlaying.current) player.playVideo();
       }),
     []

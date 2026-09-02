@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { EchoState, initialEcho, observed, pushed } from "../lib/embedVolume";
+import { EchoState, initialEcho, observed, pushed, shouldMute } from "../lib/embedVolume";
 import { hasGestured, registerUnmuteTarget } from "../lib/audioGestures";
 import { loadScriptOnce } from "../lib/loadScript";
 import { QueueItem, SYNC_TOLERANCE_SECONDS } from "../types";
@@ -307,7 +307,11 @@ function YouTubeStage({
         const lived = Math.round(livedVolume);
         const { state, moved: volumeMoved } = observed(echo.current, lived, Date.now());
         echo.current = state;
-        if (volumeMoved || livedMuted !== mutedRef.current) {
+        // Compared against the mute we would be asking for, not the listener's
+        // switch: at volume 0 we mute the embed ourselves, and reading that
+        // back as a change would report a mute nobody flipped.
+        const wantMuted = shouldMute(volumeRef.current, mutedRef.current);
+        if (volumeMoved || livedMuted !== wantMuted) {
           onAudioChangeRef.current?.({
             // A mute reported on its own says nothing about the volume, so
             // don't let the embed's rounding ride along with it.
@@ -403,7 +407,8 @@ function YouTubeStage({
     const player = playerRef.current;
     if (!player) return;
     pushVolume(player);
-    if (mutedRef.current) player.mute?.();
+    // Zero has to be carried as mute, not as a number — see lib/embedVolume.
+    if (shouldMute(volumeRef.current, mutedRef.current)) player.mute?.();
     else player.unMute?.();
   }
 

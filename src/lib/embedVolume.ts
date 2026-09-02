@@ -61,3 +61,17 @@ export function observed(
   if (Math.abs(lived - state.echoed) <= TOLERANCE) return { state, moved: false };
   return { state: { ...state, echoed: lived }, moved: true };
 }
+
+/**
+ * Whether the embed should be told to mute, given what this listener has asked
+ * for.
+ *
+ * A volume of zero has to be carried as mute rather than as a number, because
+ * the embed will not hold it: `setVolume(0)` trips YouTube's own mute flag, and
+ * the `unMute()` that follows — sent because *our* mute is off — restores the
+ * level from before it. Dragging the slider to the bottom therefore left the
+ * track playing on at whatever it had been, with the readout claiming 0%.
+ */
+export function shouldMute(volume: number, muted: boolean): boolean {
+  return muted || !(volume > 0);
+}

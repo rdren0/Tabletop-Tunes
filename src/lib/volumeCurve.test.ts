@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MAX_SLIDER, sliderToVolume, VOLUME_LADDER, volumeToSlider } from "./volumeCurve";
+import {
+  MAX_SLIDER,
+  sliderToVolume,
+  stepVolume,
+  VOLUME_LADDER,
+  VOLUME_STEP_RUNGS,
+  volumeToSlider,
+} from "./volumeCurve";
 
 const positions = Array.from({ length: MAX_SLIDER + 1 }, (_, i) => i);
 
@@ -65,5 +72,37 @@ describe("volumeToSlider", () => {
     expect(volumeToSlider(-5)).toBe(0);
     expect(volumeToSlider(200)).toBe(MAX_SLIDER);
     expect(volumeToSlider(Number.NaN)).toBe(0);
+  });
+});
+
+describe("stepVolume", () => {
+  it("moves up and back down to where it started", () => {
+    const up = stepVolume(40, VOLUME_STEP_RUNGS);
+    expect(up).toBeGreaterThan(40);
+    expect(stepVolume(up, -VOLUME_STEP_RUNGS)).toBe(40);
+  });
+
+  it("stops at silence rather than running off the bottom", () => {
+    expect(stepVolume(0, -VOLUME_STEP_RUNGS)).toBe(0);
+    expect(stepVolume(1, -100)).toBe(0);
+  });
+
+  it("stops at full rather than running off the top", () => {
+    expect(stepVolume(100, VOLUME_STEP_RUNGS)).toBe(100);
+    expect(stepVolume(50, 1000)).toBe(100);
+  });
+
+  it("can reach silence from the quietest audible rung", () => {
+    // The ladder's second rung is volume 1; one step down from there has to
+    // land on the stop, or the buttons could never turn the sound off.
+    expect(stepVolume(1, -VOLUME_STEP_RUNGS)).toBe(0);
+  });
+
+  it("always lands on a rung the slider can show", () => {
+    let v = 0;
+    for (let i = 0; i < 40; i += 1) {
+      v = stepVolume(v, VOLUME_STEP_RUNGS);
+      expect(VOLUME_LADDER).toContain(v);
+    }
   });
 });
