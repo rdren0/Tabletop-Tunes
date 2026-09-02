@@ -1,7 +1,7 @@
 ---
 title: Tabletop Tunes
 description: Queue YouTube music and play it in sync with your whole party
-author: Rachael
+author: RDrennan
 image: https://tabletop-tunes.com/hero.svg
 icon: https://tabletop-tunes.com/store-icon.svg
 tags:

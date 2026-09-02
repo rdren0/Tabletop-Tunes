@@ -33,6 +33,8 @@ import {
 } from "./lib/preferences";
 import { MAX_SLIDER, sliderToVolume, volumeToSlider } from "./lib/volumeCurve";
 import { initialWatch, observedRoom } from "./lib/roomStart";
+import { appendToQueue } from "./lib/queueAdd";
+import { isStalePlayback } from "./lib/stalePlayback";
 
 /** Where questions, bugs and requests go. Mirrored in the manifest's homepage_url. */
 const ISSUES_URL = "https://github.com/rdren0/Tabletop-Tunes/issues";
@@ -190,6 +192,33 @@ export default function App() {
   }, [roomLoaded, room.isPlaying]);
 
   /**
+   * A table that closes Owlbear without pressing pause leaves the room flagged
+   * as playing forever. Whoever runs the room clears that once, on the way in,
+   * so the night starts quiet and the first track is theirs to begin — see
+   * lib/stalePlayback for why an old anchor proves nothing is actually
+   * sounding. Only the GM writes it, so a room full of panels opening at once
+   * doesn't stampede the same correction.
+   */
+  const stalenessChecked = useRef(false);
+  const roomRef = useRef(room);
+  roomRef.current = room;
+  const partyRef = useRef(party);
+  partyRef.current = party;
+  useEffect(() => {
+    if (!roomLoaded || !isGM || stalenessChecked.current) return;
+    stalenessChecked.current = true;
+    // Presence and the party list arrive on their own schedule, and reading
+    // them too early would show an empty room that isn't one. A few seconds
+    // costs nothing here: whatever is decided, nothing is audible yet.
+    const timer = window.setTimeout(() => {
+      if (!isStalePlayback(roomRef.current, partyRef.current)) return;
+      patchRoom({ isPlaying: false, anchorPosition: 0, anchorAt: Date.now() });
+    }, 4000);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomLoaded, isGM]);
+
+  /**
    * Chrome (and every other browser) refuses to start audio that no one asked
    * for, and a room that was already playing when you opened the panel is
    * exactly that. The prompt only appears once playback has genuinely failed
@@ -284,14 +313,7 @@ export default function App() {
       title,
       link,
     };
-    const nextQueue = [...room.queue, item];
-    const isFirstItem = room.currentIndex === -1;
-    patchRoom({
-      queue: nextQueue,
-      currentIndex: isFirstItem ? 0 : room.currentIndex,
-      isPlaying: isFirstItem ? true : room.isPlaying,
-      ...(isFirstItem ? restartAnchor() : {}),
-    });
+    patchRoom(appendToQueue(room, item));
     setInputValue("");
     setAdding(false);
   }
@@ -429,14 +451,9 @@ export default function App() {
       resolvedAt: _resolvedAt,
       ...item
     } = request;
-    const nextQueue = [...room.queue, item as QueueItem];
-    const isFirstItem = room.currentIndex === -1;
     patchRoom({
-      queue: nextQueue,
+      ...appendToQueue(room, item as QueueItem),
       requests: resolveRequest(request.id, "approved"),
-      currentIndex: isFirstItem ? 0 : room.currentIndex,
-      isPlaying: isFirstItem ? true : room.isPlaying,
-      ...(isFirstItem ? restartAnchor() : {}),
     });
   }
 

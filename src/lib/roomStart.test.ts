@@ -30,14 +30,14 @@ describe("observedRoom", () => {
     expect(state.started).toBe(true);
   });
 
-  it("counts the first track added to an empty queue", () => {
-    // Adding to an empty queue starts playback in the same patch, so the room
-    // goes straight from empty-and-paused to playing.
+  it("does not count a track merely being added to an empty queue", () => {
+    // Adding no longer starts anything, so the room stays paused and no client
+    // has yet been given leave to make noise.
     const state = watch([
       { loaded: true, isPlaying: false },
-      { loaded: true, isPlaying: true },
+      { loaded: true, isPlaying: false },
     ]);
-    expect(state.started).toBe(true);
+    expect(state.started).toBe(false);
   });
 
   it("lets a late joiner qualify once the room is stopped and started again", () => {
