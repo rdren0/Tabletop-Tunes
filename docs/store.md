@@ -17,7 +17,7 @@ Shared music for your table. Paste a YouTube link, build a queue, and when you
 hit play everyone hears the same track at the same moment — no counting down
 over voice chat, no one lagging half a verse behind.
 
-![The Tabletop Tunes panel with a track queued and waiting to be started](https://tabletop-tunes.com/screenshots/dm-playlist-paused.png)
+![The Tabletop Tunes panel with a queue of three tracks, the first cued and waiting to be started](https://tabletop-tunes.com/screenshots/dm-playlist-multiple.png)
 
 **Getting started.** Open the panel from the toolbar, paste a YouTube video or
 playlist link, and press Add. Nothing plays until you say so — the first track
@@ -54,7 +54,7 @@ Players without control can suggest a track instead. It goes to the GM and any
 DJs to approve or decline, and — unlike a suggestion shouted over voice chat —
 the person who asked is actually told what happened to it.
 
-![A listener's panel, showing the request box and why the room is quiet](https://tabletop-tunes.com/screenshots/player-playlist-paused.png)
+![A listener's panel: the queue, the request box, and why the room is quiet](https://tabletop-tunes.com/screenshots/player-playlist-multiple.png)
 
 ## Built to sit in the corner
 
