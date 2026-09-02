@@ -23,9 +23,10 @@ over voice chat, no one lagging half a verse behind.
 -->
 
 **Getting started.** Open the panel from the toolbar, paste a YouTube video or
-playlist link, and press Add. The first track starts straight away; anything
-after it joins the queue. Click any track to jump to it, drag the handle to
-reorder, and use the transport to play, pause, or skip for the whole room.
+playlist link, and press Add. Nothing plays until you say so — the first track
+is cued up and waits for you, so you can build the night's list while people are
+still arriving. Click any track to jump to it, drag the handle to reorder, and
+use the transport to play, pause, or skip for the whole room.
 
 ## Everyone stays in step
 
@@ -37,7 +38,8 @@ track rather than starting it over for everybody.
 
 Volume and mute stay personal. Each player sets their own level, and it's
 remembered next time they open the panel, so the one person who wants the
-battle music loud doesn't decide it for the table.
+battle music loud doesn't decide it for the table. On a phone the quieter and
+louder buttons either side of the slider step the level without a fiddly drag.
 
 ## Hand out the aux cable
 
@@ -80,6 +82,9 @@ once. After that the GM's controls drive their playback for the rest of the
 session: skips, pauses and new tracks all follow automatically. The panel says
 so when it's waiting on you, so nobody has to remember.
 
+- **The room starts quiet.** Queueing a track never starts it, and a room left
+  playing when everyone logged off opens paused. The music begins when whoever
+  runs the room presses play, and not before.
 - **YouTube only.** Videos and playlists, pasted as links. There's no search —
   find the track on YouTube and paste it.
 - **Phones and tablets** are stricter still, and a player may land in muted
