@@ -17,10 +17,7 @@ Shared music for your table. Paste a YouTube link, build a queue, and when you
 hit play everyone hears the same track at the same moment — no counting down
 over voice chat, no one lagging half a verse behind.
 
-<!--
-  SCREENSHOT — replace this comment with the main panel in action, e.g.
-  ![The Tabletop Tunes panel with a queue](https://tabletop-tunes.com/screenshots/panel.png)
--->
+![The Tabletop Tunes panel with a track queued and waiting to be started](https://tabletop-tunes.com/screenshots/dm-playlist-paused.png)
 
 **Getting started.** Open the panel from the toolbar, paste a YouTube video or
 playlist link, and press Add. Nothing plays until you say so — the first track
@@ -47,10 +44,9 @@ By default the GM controls everything. Grant **DJ** access to any player and
 they get the same queue and transport controls — useful when someone else is
 running a scene, or when you'd rather not be the one picking tracks all night.
 
-<!--
-  SCREENSHOT — replace with the DJ privileges panel, e.g.
-  ![Granting DJ access to a player](https://tabletop-tunes.com/screenshots/dj.png)
--->
+![The GM's DJ privileges panel, with a Make DJ button beside a player's name](https://tabletop-tunes.com/screenshots/dm-player-dj-add.png)
+
+![The same player's panel once granted, showing the queue and transport controls](https://tabletop-tunes.com/screenshots/player-dj-access-granted.png)
 
 ## Requests from the table
 
@@ -58,10 +54,7 @@ Players without control can suggest a track instead. It goes to the GM and any
 DJs to approve or decline, and — unlike a suggestion shouted over voice chat —
 the person who asked is actually told what happened to it.
 
-<!--
-  SCREENSHOT — replace with the requests list, e.g.
-  ![A pending song request awaiting approval](https://tabletop-tunes.com/screenshots/requests.png)
--->
+![A listener's panel, showing the request box and why the room is quiet](https://tabletop-tunes.com/screenshots/player-playlist-paused.png)
 
 ## Built to sit in the corner
 
