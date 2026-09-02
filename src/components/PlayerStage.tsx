@@ -305,18 +305,21 @@ function YouTubeStage({
         // against our number: it does not keep what it is given, and at the
         // quiet end the difference is several steps. See lib/embedVolume.
         const lived = Math.round(livedVolume);
-        const { state, moved: volumeMoved } = observed(echo.current, lived, Date.now());
+        const {
+          state,
+          moved: volumeMoved,
+          muteMoved,
+        } = observed(echo.current, lived, livedMuted, Date.now());
         echo.current = state;
-        // Compared against the mute we would be asking for, not the listener's
-        // switch: at volume 0 we mute the embed ourselves, and reading that
-        // back as a change would report a mute nobody flipped.
-        const wantMuted = shouldMute(volumeRef.current, mutedRef.current);
-        if (volumeMoved || livedMuted !== wantMuted) {
+        if (volumeMoved || muteMoved) {
           onAudioChangeRef.current?.({
             // A mute reported on its own says nothing about the volume, so
             // don't let the embed's rounding ride along with it.
             volume: volumeMoved ? lived : volumeRef.current,
-            muted: livedMuted,
+            // Likewise the other way: a volume nudged on the embed's own
+            // slider says nothing about mute, and taking its word for that
+            // would unmute a listener who never asked.
+            muted: muteMoved ? livedMuted : mutedRef.current,
           });
         }
       }

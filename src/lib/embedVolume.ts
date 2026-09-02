@@ -25,41 +25,67 @@ export const VOLUME_SETTLE_MS = 3000;
 const TOLERANCE = 1;
 
 export interface EchoState {
-  /** When we last handed the embed a volume, in epoch ms. */
+  /** When we last handed the embed its audio settings, in epoch ms. */
   pushedAt: number;
-  /** What it reported for that push, or null while we're still waiting. */
+  /** The volume it reported for that push, or null while we're still waiting. */
   echoed: number | null;
+  /** The mute it reported for that push, or null while we're still waiting. */
+  echoedMuted: boolean | null;
 }
 
 /** Nothing pushed yet: whatever the embed opens at is the baseline. */
-export const initialEcho: EchoState = { pushedAt: 0, echoed: null };
+export const initialEcho: EchoState = { pushedAt: 0, echoed: null, echoedMuted: null };
 
-/** Call whenever a volume is handed to the embed. */
+/** Call whenever volume or mute is handed to the embed. */
 export function pushed(now: number): EchoState {
-  return { pushedAt: now, echoed: null };
+  return { pushedAt: now, echoed: null, echoedMuted: null };
 }
 
 /**
- * Fold one read-back into the state. `moved` means a person moved the embed's
- * own volume control and our side should follow them to `lived`.
+ * Fold one read-back into the state. A `moved` flag means a person worked the
+ * embed's own control and our side should follow them.
+ *
+ * Mute is held to exactly the same discipline as volume, and for the same
+ * reason. `isMuted()` reads a value the API caches from the frame's messages,
+ * so for a moment after `mute()` it still answers with what the player held
+ * before. Comparing that against what we had just asked for reported a change
+ * nobody made — and the panel, following its own player, promptly unmuted
+ * itself. That is why mute appeared not to work at all: every press was undone
+ * by the read-back a tick later, and so was every drag to zero, since zero is
+ * carried as mute.
  */
 export function observed(
   state: EchoState,
   lived: number,
+  livedMuted: boolean,
   now: number
-): { state: EchoState; moved: boolean } {
+): { state: EchoState; moved: boolean; muteMoved: boolean } {
   if (now - state.pushedAt < VOLUME_SETTLE_MS) {
-    // Too soon after a push to know whose number this is: the value read here
-    // is updated over the embed's message channel, and until that lands it can
-    // still be reporting what the player held before.
-    return { state: { ...state, echoed: null }, moved: false };
+    // Too soon after a push to know whose values these are: they are updated
+    // over the embed's message channel, and until that lands they can still be
+    // reporting what the player held before.
+    return {
+      state: { ...state, echoed: null, echoedMuted: null },
+      moved: false,
+      muteMoved: false,
+    };
   }
-  if (state.echoed === null) {
+  if (state.echoed === null || state.echoedMuted === null) {
     // The first settled look after a push is that push coming back.
-    return { state: { ...state, echoed: lived }, moved: false };
+    return {
+      state: { ...state, echoed: lived, echoedMuted: livedMuted },
+      moved: false,
+      muteMoved: false,
+    };
   }
-  if (Math.abs(lived - state.echoed) <= TOLERANCE) return { state, moved: false };
-  return { state: { ...state, echoed: lived }, moved: true };
+  const moved = Math.abs(lived - state.echoed) > TOLERANCE;
+  const muteMoved = livedMuted !== state.echoedMuted;
+  if (!moved && !muteMoved) return { state, moved: false, muteMoved: false };
+  return {
+    state: { ...state, echoed: moved ? lived : state.echoed, echoedMuted: livedMuted },
+    moved,
+    muteMoved,
+  };
 }
 
 /**

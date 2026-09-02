@@ -10,17 +10,26 @@ import {
 
 const SETTLED = VOLUME_SETTLE_MS + 1;
 
-/** Read the embed back repeatedly, as the heartbeat does. */
-function ticks(state: EchoState, reads: number[], from: number, every = 2000) {
+/** Read the embed back repeatedly, as the heartbeat does. Mute stays put
+ *  unless a read says otherwise, so volume cases can ignore it. */
+function ticks(
+  state: EchoState,
+  reads: (number | [number, boolean])[],
+  from: number,
+  every = 2000
+) {
   const moves: number[] = [];
+  const muteMoves: boolean[] = [];
   let now = from;
-  for (const lived of reads) {
+  for (const read of reads) {
+    const [lived, livedMuted] = Array.isArray(read) ? read : [read, false];
     now += every;
-    const next = observed(state, lived, now);
+    const next = observed(state, lived, livedMuted, now);
     state = next.state;
     if (next.moved) moves.push(lived);
+    if (next.muteMoved) muteMoves.push(livedMuted);
   }
-  return { state, moves };
+  return { state, moves, muteMoves };
 }
 
 describe("observed", () => {
@@ -50,10 +59,10 @@ describe("observed", () => {
     // The old volume is still on the wire when the first read lands. Taking it
     // as the echo would make the push itself look like somebody's adjustment.
     let state = pushed(1000);
-    const early = observed(state, 40, 1000 + 500);
+    const early = observed(state, 40, false, 1000 + 500);
     expect(early.moved).toBe(false);
     state = early.state;
-    const settled = observed(state, 3, 1000 + SETTLED);
+    const settled = observed(state, 3, false, 1000 + SETTLED);
     expect(settled.moved).toBe(false);
     expect(settled.state.echoed).toBe(3);
   });
@@ -61,6 +70,55 @@ describe("observed", () => {
   it("still forgives a step either side of the settled echo", () => {
     const { moves } = ticks(pushed(1000), [40, 41, 39, 40], 1000 + SETTLED);
     expect(moves).toEqual([]);
+  });
+});
+
+describe("observed, on mute", () => {
+  it("does not read our own mute back as somebody flipping it", () => {
+    // The regression this exists for. We push mute; isMuted() answers with the
+    // stale value for a moment; taking that as a change reported "not muted"
+    // and the panel unmuted itself a tick later. Mute never stuck, and neither
+    // did a slider dragged to zero, which is carried as mute.
+    const { muteMoves } = ticks(pushed(1000), [[50, false], [50, true], [50, true]], 1000);
+    expect(muteMoves).toEqual([]);
+  });
+
+  it("reports somebody using the embed's own mute button", () => {
+    const { muteMoves } = ticks(
+      pushed(1000),
+      [[50, false], [50, false], [50, true]],
+      1000 + SETTLED
+    );
+    expect(muteMoves).toEqual([true]);
+  });
+
+  it("reports a mute change only once, then holds it", () => {
+    const { muteMoves } = ticks(
+      pushed(1000),
+      [[50, false], [50, true], [50, true], [50, true]],
+      1000 + SETTLED
+    );
+    expect(muteMoves).toEqual([true]);
+  });
+
+  it("follows an unmute made on the embed too", () => {
+    const { muteMoves } = ticks(
+      pushed(1000),
+      [[50, true], [50, false]],
+      1000 + SETTLED
+    );
+    expect(muteMoves).toEqual([false]);
+  });
+
+  it("keeps volume and mute apart", () => {
+    // A volume nudged on the embed must not carry a mute verdict with it.
+    const { moves, muteMoves } = ticks(
+      pushed(1000),
+      [[50, true], [70, true]],
+      1000 + SETTLED
+    );
+    expect(moves).toEqual([70]);
+    expect(muteMoves).toEqual([]);
   });
 });
 

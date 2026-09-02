@@ -74,9 +74,10 @@ export default function App() {
   // True when the browser refused audio and playback started muted, so the
   // speaker button can be explained rather than just looking wrong.
   const [autoMuted, setAutoMuted] = useState(false);
-  // Open by default so a GM sees who holds DJ access without hunting for it,
-  // but still collapsible once they've had a look.
-  const [showDjPanel, setShowDjPanel] = useState(true);
+  // Collapsed by default. It configures the room rather than driving it, and
+  // in a popover this size a panel nobody asked for pushes the queue — the
+  // thing actually being used — down out of sight. The ⚙ toggles it.
+  const [showDjPanel, setShowDjPanel] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   // Collapsed by default: support is worth having permanently reachable, but
   // it costs vertical space in a popover that sizes itself to its contents.
@@ -193,9 +194,13 @@ export default function App() {
     : room.isPlaying
       ? "playing"
       : "paused";
-  // While the room is paused a listener has no use for the embed, and leaving
-  // it there only invites a press that the heartbeat undoes a second later.
-  const stageConcealed = !canControl && listenerState === "paused";
+  // Every silent state, not just a deliberate pause. A listener has no use for
+  // the embed while nothing is sounding, and leaving it there only invites a
+  // press that the heartbeat undoes a second later — but the bigger reason is
+  // that silence has to be attributed. A panel sitting there black looks
+  // broken, and since a track no longer starts itself when queued, not-yet-
+  // started is the state most sessions now open in.
+  const stageConcealed = !canControl && listenerState !== "playing";
   // Whoever runs the room only ever acts on undecided requests; the decided
   // ones are hanging around purely as feedback for the person who asked.
   const pendingRequests = room.requests.filter((r) => requestStatusOf(r) === "pending");
@@ -544,8 +549,21 @@ export default function App() {
         {stageConcealed && (
           <div className="stage-notice" role="status">
             <span className="stage-notice-icon">⏸</span>
-            <span>The GM has paused the music</span>
-            <em>It picks back up for everyone when they hit play.</em>
+            {/* Both states say the same thing — the GM holds the controls and
+                nothing is playing — but an empty queue is not a pause, and
+                calling it one would have a listener waiting on a track that
+                doesn't exist. */}
+            {listenerState === "empty" ? (
+              <>
+                <span>The GM hasn't started the music</span>
+                <em>Nothing is queued yet. It starts for everyone when they hit play.</em>
+              </>
+            ) : (
+              <>
+                <span>The GM has paused the music</span>
+                <em>It picks back up for everyone when they hit play.</em>
+              </>
+            )}
           </div>
         )}
       </div>
